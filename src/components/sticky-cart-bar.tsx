@@ -10,8 +10,8 @@ export function StickyCartBar() {
   const router = useRouter();
   const { cart, finalTotal } = useCart();
 
-  // Hide on cart, checkout, and admin pages
-  const hiddenRoutes = ["/cart", "/checkout", "/admin/images"];
+  // Hide on cart, checkout, product details, and admin pages
+  const hiddenRoutes = ["/cart", "/checkout", "/product", "/admin"];
   if (hiddenRoutes.some((r) => pathname.startsWith(r))) return null;
 
   const totalItems = cart.reduce((sum, item) => sum + item.quantity, 0);

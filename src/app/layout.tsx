@@ -20,9 +20,14 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "NONZO - Eat Better. Live Better.",
+  title: "NONZO | Eat Better. Live Better.",
   description:
     "Premium cold-chain seafood delivery straight from sustainable coastal waters. Preservative-free, fresh fish, prawns, crabs, and shellfish.",
+  icons: {
+    icon: "/NONZO-LOGO.png",
+    shortcut: "/NONZO-LOGO.png",
+    apple: "/NONZO-LOGO.png",
+  }
 };
 
 export const viewport: Viewport = {
@@ -46,23 +51,6 @@ export default function RootLayout({
       <body className="min-h-full flex flex-col bg-white text-foreground">
         <LocationProvider>
           <CartProvider>
-            {/* SVG Filter to remove black background from the logo */}
-            <svg width="0" height="0" className="absolute pointer-events-none" style={{ visibility: "hidden" }}>
-              <defs>
-                <filter id="remove-black-bg" colorInterpolationFilters="sRGB">
-                  <feColorMatrix
-                    type="matrix"
-                    values="
-                      1   0   0   0   0
-                      0   1   0   0   0
-                      0   0   1   0   0
-                      3   3   3   0  -0.1
-                    "
-                  />
-                </filter>
-              </defs>
-            </svg>
-
             {/* Netflix-style startup splash */}
             <SplashScreen />
 
@@ -77,6 +65,9 @@ export default function RootLayout({
               {children}
             </main>
 
+            {/* Desktop Footer (Hidden on mobile) */}
+            <DesktopFooter />
+
             {/* Floating cart summary bar (mobile + desktop) */}
             <StickyCartBar />
 
@@ -88,3 +79,6 @@ export default function RootLayout({
     </html>
   );
 }
+
+// Placeholder import for DesktopFooter until it is created
+import { DesktopFooter } from "@/components/desktop-footer";

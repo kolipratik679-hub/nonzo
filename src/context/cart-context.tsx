@@ -1,7 +1,40 @@
 "use client";
 
 import React, { createContext, useContext, useState, useEffect } from "react";
-import { Product, CutType } from "@/lib/mock-data";
+import { Product, CutType, CUT_TYPES } from "@/lib/mock-data";
+
+// ── Weight Pricing Helpers (Dynamic Pricing) ──────────────────────
+const parseWeightToGrams = (w: string): number => {
+  const val = parseFloat(w);
+  if (w.toLowerCase().includes("kg")) {
+    return val * 1000;
+  }
+  return val;
+};
+
+export const getWeightPrice = (product: Product, weight: string): number => {
+  const exactMatch = product.weightOptions.find((o) => o.weight === weight);
+  if (exactMatch) return exactMatch.price;
+
+  const baseOpt = product.weightOptions[0];
+  const baseWeightVal = parseWeightToGrams(baseOpt.weight);
+  const targetWeightVal = parseWeightToGrams(weight);
+
+  const ratio = targetWeightVal / baseWeightVal;
+  
+  let scaleModifier = 1.0;
+  if (ratio > 1) scaleModifier = 0.92; // 8% bulk discount
+  if (ratio < 1) scaleModifier = 1.05; // 5% small portion mark-up
+
+  return Math.round(baseOpt.price * ratio * scaleModifier);
+};
+
+export const getWeightOriginalPrice = (product: Product, weight: string): number => {
+  const exactMatch = product.weightOptions.find((o) => o.weight === weight);
+  if (exactMatch) return exactMatch.originalPrice;
+
+  return Math.round(getWeightPrice(product, weight) * 1.2);
+};
 
 // ── CartItem: flat shape for easy rendering ────────────────────────
 export interface CartItem {
@@ -40,6 +73,8 @@ interface CartContextType {
   ) => void;
   removeFromCart: (cartItemId: string) => void;
   updateQuantity: (cartItemId: string, quantity: number) => void;
+  updateCartItemWeight: (cartItemId: string, weight: string) => void;
+  updateCartItemCut: (cartItemId: string, cutId: string) => void;
   clearCart: () => void;
   // Computed totals
   subtotal: number;
@@ -103,11 +138,8 @@ export function CartProvider({ children }: { children: React.ReactNode }) {
     cutType: CutType,
     specialInstructions: string
   ) => {
-    const weightOption =
-      product.weightOptions.find((o) => o.weight === weight) ||
-      product.weightOptions[0];
-    const price = weightOption.price + cutType.extraCharge;
-    const originalPrice = weightOption.originalPrice + cutType.extraCharge;
+    const price = getWeightPrice(product, weight) + cutType.extraCharge;
+    const originalPrice = getWeightOriginalPrice(product, weight) + cutType.extraCharge;
     const cartItemId = `${product.id}-${weight}-${cutType.id}`;
 
     const existingIndex = cart.findIndex((item) => item.id === cartItemId);
@@ -148,6 +180,89 @@ export function CartProvider({ children }: { children: React.ReactNode }) {
         item.id === cartItemId ? { ...item, quantity } : item
       )
     );
+  };
+
+  const updateCartItemWeight = (cartItemId: string, newWeight: string) => {
+    const item = cart.find((i) => i.id === cartItemId);
+    if (!item) return;
+
+    const product = item._product;
+    const currentCutType = item._cutType;
+
+    const newWeightPrice = getWeightPrice(product, newWeight);
+    const newWeightOriginalPrice = getWeightOriginalPrice(product, newWeight);
+
+    const price = newWeightPrice + currentCutType.extraCharge;
+    const originalPrice = newWeightOriginalPrice + currentCutType.extraCharge;
+
+    const newId = `${product.id}-${newWeight}-${currentCutType.id}`;
+
+    const newCart = [...cart];
+    const itemIndex = newCart.findIndex((i) => i.id === cartItemId);
+    const existingIndex = newCart.findIndex((i) => i.id === newId);
+
+    if (existingIndex > -1 && existingIndex !== itemIndex) {
+      newCart[existingIndex].quantity += item.quantity;
+      newCart.splice(itemIndex, 1);
+    } else {
+      newCart[itemIndex] = {
+        ...newCart[itemIndex],
+        id: newId,
+        weight: newWeight,
+        price,
+        originalPrice,
+      };
+    }
+    saveCart(newCart);
+  };
+
+  const updateCartItemCut = (cartItemId: string, newCutId: string) => {
+    const item = cart.find((i) => i.id === cartItemId);
+    if (!item) return;
+
+    const product = item._product;
+    const currentCutType = item._cutType;
+
+    const SPECIAL_CUT_OBJ = {
+      id: "special-cut",
+      name: "Special Cut",
+      description: "Custom specialty cut requested by customer.",
+      extraCharge: 30,
+      iconSvg: `<svg viewBox="0 0 64 64" class="w-12 h-12 stroke-current fill-none" xmlns="http://www.w3.org/2000/svg">
+        <path d="M12 12L52 52M52 12L12 52" stroke-width="2" stroke-linecap="round"/>
+      </svg>`
+    };
+
+    const cutTypeObj = newCutId === "special-cut"
+      ? SPECIAL_CUT_OBJ
+      : CUT_TYPES.find((c) => c.id === newCutId) || currentCutType;
+
+    const weightPrice = getWeightPrice(product, item.weight);
+    const weightOriginalPrice = getWeightOriginalPrice(product, item.weight);
+
+    const price = weightPrice + cutTypeObj.extraCharge;
+    const originalPrice = weightOriginalPrice + cutTypeObj.extraCharge;
+
+    const newId = `${product.id}-${item.weight}-${cutTypeObj.id}`;
+
+    const newCart = [...cart];
+    const itemIndex = newCart.findIndex((i) => i.id === cartItemId);
+    const existingIndex = newCart.findIndex((i) => i.id === newId);
+
+    if (existingIndex > -1 && existingIndex !== itemIndex) {
+      newCart[existingIndex].quantity += item.quantity;
+      newCart.splice(itemIndex, 1);
+    } else {
+      newCart[itemIndex] = {
+        ...newCart[itemIndex],
+        id: newId,
+        cutName: cutTypeObj.name,
+        price,
+        originalPrice,
+        _cutType: cutTypeObj,
+      };
+    }
+    saveCart(newCart);
   };
 
   const clearCart = () => {
@@ -214,6 +329,8 @@ export function CartProvider({ children }: { children: React.ReactNode }) {
         addToCart,
         removeFromCart,
         updateQuantity,
+        updateCartItemWeight,
+        updateCartItemCut,
         clearCart,
         subtotal,
         cleaningFee,

@@ -52,7 +52,6 @@ export function SplashScreen() {
             width={280}
             height={280}
             className="h-auto w-[180px] object-contain sm:w-[220px] md:w-[280px]"
-            style={{ filter: "url(#remove-black-bg)" }}
             priority
           />
         </div>

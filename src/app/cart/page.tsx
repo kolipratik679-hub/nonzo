@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import Image from "next/image";
 import { useRouter } from "next/navigation";
 import { useCart } from "@/context/cart-context";
@@ -18,7 +18,9 @@ import {
   X,
   CheckCircle2,
   Gift,
+  ChevronDown,
 } from "lucide-react";
+import { CUT_TYPES } from "@/lib/mock-data";
 
 export default function CartPage() {
   const {
@@ -35,10 +37,17 @@ export default function CartPage() {
     cleaningFee,
     finalTotal,
     promoError,
+    updateCartItemWeight,
+    updateCartItemCut,
   } = useCart();
   const router = useRouter();
   const [promoInput, setPromoInput] = useState<string>("");
   const [promoTouched, setPromoTouched] = useState<boolean>(false);
+  const [isPromoExpanded, setIsPromoExpanded] = useState<boolean>(!!promoCode);
+
+  useEffect(() => {
+    document.title = "Cart | NONZO";
+  }, []);
 
   const totalItems = cart.reduce((sum, item) => sum + item.quantity, 0);
   const savings = cart.reduce(
@@ -93,141 +102,199 @@ export default function CartPage() {
 
       {/* Cart items */}
       <div className="space-y-3">
-        {cart.map((item) => (
-          <div
-            key={item.id}
-            className="flex items-start gap-3.5 rounded-2xl border border-border-gray bg-white p-3.5"
-          >
-            {/* Thumbnail */}
-            <div className="relative h-16 w-16 shrink-0 overflow-hidden rounded-xl bg-light-gray">
-              <Image
-                src={item.image || "/NONZO-LOGO.png"}
-                alt={item.name || "Product image"}
-                fill
-                sizes="64px"
-                className="object-cover"
-              />
-            </div>
-
-            {/* Details */}
-            <div className="flex-1 min-w-0">
-              <h3 className="text-xs font-bold text-foreground leading-tight truncate">
-                {item.name}
-              </h3>
-              <div className="flex items-center gap-2 mt-1 flex-wrap">
-                <span className="rounded-full bg-light-gray px-2 py-0.5 text-[9px] font-semibold text-zinc-500">
-                  {item.weight}
-                </span>
-                <span className="rounded-full bg-light-gray px-2 py-0.5 text-[9px] font-semibold text-zinc-500">
-                  {item.cutName}
-                </span>
-              </div>
-
-              <div className="mt-2 flex items-center justify-between">
-                {/* Price */}
-                <div>
-                  <span className="text-sm font-black text-foreground">
-                    ₹{item.price * item.quantity}
-                  </span>
-                  {item.originalPrice > item.price && (
-                    <span className="ml-1.5 text-[9px] text-zinc-400 line-through">
-                      ₹{item.originalPrice * item.quantity}
-                    </span>
-                  )}
-                </div>
-
-                {/* Quantity control */}
-                <div className="flex items-center gap-2 rounded-lg border border-brand-red bg-brand-red/5 px-2.5 py-1">
-                  <button
-                    onClick={() => updateQuantity(item.id, item.quantity - 1)}
-                    className="text-brand-red active-scale"
-                  >
-                    <Minus className="h-3 w-3 stroke-[3]" />
-                  </button>
-                  <span className="text-xs font-extrabold text-foreground w-3 text-center">
-                    {item.quantity}
-                  </span>
-                  <button
-                    onClick={() => updateQuantity(item.id, item.quantity + 1)}
-                    className="text-brand-red active-scale"
-                  >
-                    <Plus className="h-3 w-3 stroke-[3]" />
-                  </button>
-                </div>
-              </div>
-            </div>
-
-            {/* Remove */}
-            <button
-              onClick={() => removeFromCart(item.id)}
-              className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-red-50 border border-red-100 text-brand-red transition-all hover:bg-brand-red hover:text-white active-scale"
+        {cart.map((item) => {
+          const allowedCuts = item._product?.allowedCuts || [];
+          return (
+            <div
+              key={item.id}
+              className="flex items-start gap-3.5 rounded-2xl border border-border-gray bg-white p-3.5"
             >
-              <Trash2 className="h-3.5 w-3.5" />
-            </button>
-          </div>
-        ))}
+              {/* Thumbnail */}
+              <div className="relative h-16 w-16 shrink-0 overflow-hidden rounded-xl bg-light-gray">
+                <Image
+                  src={item.image || "/NONZO-LOGO.png"}
+                  alt={item.name || "Product image"}
+                  fill
+                  sizes="64px"
+                  className="object-cover"
+                />
+              </div>
+
+              {/* Details */}
+              <div className="flex-1 min-w-0">
+                <h3 className="text-xs font-bold text-foreground leading-tight truncate">
+                  {item.name}
+                </h3>
+                <div className="flex items-center gap-2 mt-1.5 flex-wrap">
+                  {/* Weight Dropdown Selector */}
+                  <div className="relative inline-flex items-center">
+                    <select
+                      value={item.weight}
+                      onChange={(e) => updateCartItemWeight(item.id, e.target.value)}
+                      className="appearance-none rounded-full bg-zinc-50 hover:bg-zinc-100/80 px-2.5 pr-6 py-1 text-[9px] font-bold text-zinc-600 outline-none border border-border-gray focus:border-brand-red cursor-pointer transition-all"
+                    >
+                      {["250g", "500g", "1kg", "2kg"].map((w) => (
+                        <option key={w} value={w}>
+                          {w}
+                        </option>
+                      ))}
+                    </select>
+                    <ChevronDown className="pointer-events-none absolute right-1.5 h-2.5 w-2.5 text-zinc-400 stroke-[3]" />
+                  </div>
+
+                  {/* Cut Type Dropdown Selector */}
+                  <div className="relative inline-flex items-center">
+                    <select
+                      value={item._cutType?.id || "whole"}
+                      onChange={(e) => updateCartItemCut(item.id, e.target.value)}
+                      className="appearance-none rounded-full bg-zinc-50 hover:bg-zinc-100/80 px-2.5 pr-6 py-1 text-[9px] font-bold text-zinc-600 outline-none border border-border-gray focus:border-brand-red cursor-pointer transition-all"
+                    >
+                      {allowedCuts.map((cutId) => {
+                        const cut = CUT_TYPES.find((c) => c.id === cutId);
+                        return cut ? (
+                          <option key={cut.id} value={cut.id}>
+                            {cut.name}
+                          </option>
+                        ) : null;
+                      })}
+                      <option value="special-cut">Special Cut</option>
+                    </select>
+                    <ChevronDown className="pointer-events-none absolute right-1.5 h-2.5 w-2.5 text-zinc-400 stroke-[3]" />
+                  </div>
+                </div>
+
+                <div className="mt-3 flex items-center justify-between">
+                  {/* Price */}
+                  <div>
+                    <span className="text-xs font-black text-foreground">
+                      ₹{item.price * item.quantity}
+                    </span>
+                    {item.originalPrice > item.price && (
+                      <>
+                        <span className="ml-1.5 text-[9px] text-zinc-400 line-through">
+                          ₹{item.originalPrice * item.quantity}
+                        </span>
+                        <span className="ml-1.5 text-[9px] font-extrabold text-brand-red">
+                          ({Math.round(((item.originalPrice - item.price) / item.originalPrice) * 100)}% OFF)
+                        </span>
+                      </>
+                    )}
+                  </div>
+
+                  {/* Quantity control */}
+                  <div className="flex items-center gap-2 rounded-lg border border-brand-red bg-brand-red/5 px-2.5 py-1">
+                    <button
+                      onClick={() => updateQuantity(item.id, item.quantity - 1)}
+                      className="text-brand-red active-scale"
+                    >
+                      <Minus className="h-3 w-3 stroke-[3]" />
+                    </button>
+                    <span className="text-xs font-extrabold text-foreground w-3 text-center">
+                      {item.quantity}
+                    </span>
+                    <button
+                      onClick={() => updateQuantity(item.id, item.quantity + 1)}
+                      className="text-brand-red active-scale"
+                    >
+                      <Plus className="h-3 w-3 stroke-[3]" />
+                    </button>
+                  </div>
+                </div>
+              </div>
+
+              {/* Remove */}
+              <button
+                onClick={() => removeFromCart(item.id)}
+                className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-red-50 border border-red-100 text-brand-red transition-all hover:bg-brand-red hover:text-white active-scale"
+              >
+                <Trash2 className="h-3.5 w-3.5" />
+              </button>
+            </div>
+          );
+        })}
       </div>
 
       {/* Promo code */}
       <div className="rounded-2xl border border-border-gray bg-white p-4">
-        <div className="flex items-center gap-2 mb-3">
-          <Tag className="h-4 w-4 text-brand-red" />
-          <span className="text-xs font-bold text-foreground">
-            Promo Code
-          </span>
-        </div>
-
         {promoCode && promoDiscount > 0 ? (
-          <div className="flex items-center justify-between rounded-xl bg-emerald-50 border border-emerald-100 px-3.5 py-3">
+          <div className="flex items-center justify-between rounded-xl bg-emerald-50 border border-emerald-100 px-3.5 py-3 animate-fade-in">
             <div className="flex items-center gap-2">
-              <BadgePercent className="h-4 w-4 text-emerald-600" />
+              <BadgePercent className="h-4 w-4 text-emerald-600 animate-pulse" />
               <div>
                 <span className="text-xs font-bold text-emerald-800">
-                  {promoCode} applied!
+                  Coupon Applied!
                 </span>
-                <p className="text-[10px] text-emerald-600 font-medium">
-                  You save ₹{promoDiscount}
+                <p className="text-[10px] text-emerald-600 font-semibold">
+                  You Saved ₹{promoDiscount}
                 </p>
               </div>
             </div>
             <button
               onClick={removePromoCode}
-              className="flex h-6 w-6 items-center justify-center rounded-full bg-emerald-100 hover:bg-emerald-200 transition-colors"
+              className="flex h-6 w-6 items-center justify-center rounded-full bg-emerald-100 hover:bg-emerald-200 transition-colors active-scale"
             >
               <X className="h-3 w-3 text-emerald-700" />
             </button>
           </div>
         ) : (
-          <div className="space-y-2">
-            <div className="flex gap-2">
-              <input
-                type="text"
-                placeholder="Enter promo code"
-                value={promoInput}
-                onChange={(e) => {
-                  setPromoInput(e.target.value.toUpperCase());
-                  setPromoTouched(true);
-                }}
-                className="flex-1 rounded-xl border border-border-gray bg-light-gray px-3.5 py-2.5 text-xs outline-none focus:border-brand-red focus:bg-white transition-all"
-              />
-              <button
-                onClick={() => applyPromoCode(promoInput)}
-                disabled={!promoInput.trim()}
-                className="rounded-xl bg-brand-red px-4 py-2.5 text-xs font-bold text-white disabled:bg-zinc-200 disabled:text-zinc-400 hover:bg-red-700 transition-all active-scale"
-              >
-                Apply
-              </button>
-            </div>
-            {promoTouched && promoError && (
-              <p className="text-[10px] font-semibold text-brand-red ml-1">
-                {promoError}
-              </p>
-            )}
-            <div className="flex items-center gap-1.5 ml-1">
-              <Gift className="h-3 w-3 text-zinc-400" />
-              <span className="text-[10px] text-zinc-400">
-                Try <span className="font-bold text-foreground">NONZO10</span> for 10% off
+          <div className="space-y-3">
+            {/* Toggle Link */}
+            <button
+              onClick={() => setIsPromoExpanded(!isPromoExpanded)}
+              className="flex w-full items-center justify-between text-left focus:outline-none"
+            >
+              <span className="text-xs font-extrabold text-brand-red flex items-center gap-1.5 hover:underline">
+                <Tag className="h-3.5 w-3.5" />
+                Have a promo code?
               </span>
+              <ChevronDown
+                className={`h-4 w-4 text-zinc-400 transition-transform duration-300 ${
+                  isPromoExpanded ? "rotate-180" : ""
+                }`}
+              />
+            </button>
+
+            {/* Smooth Collapsible Content */}
+            <div
+              className={`transition-all duration-300 overflow-hidden ${
+                isPromoExpanded ? "max-h-40 opacity-100 mt-2" : "max-h-0 opacity-0 pointer-events-none"
+              }`}
+            >
+              <div className="space-y-2 border-t border-zinc-100 pt-3">
+                <span className="text-[10px] font-bold text-zinc-400 uppercase tracking-wide block">
+                  Promo Code
+                </span>
+                <div className="flex gap-2">
+                  <input
+                    type="text"
+                    placeholder="Enter code (e.g. NONZO10)"
+                    value={promoInput}
+                    onChange={(e) => {
+                      setPromoInput(e.target.value.toUpperCase());
+                      setPromoTouched(true);
+                    }}
+                    className="flex-1 rounded-xl border border-border-gray bg-light-gray px-3.5 py-2.5 text-xs outline-none focus:border-brand-red focus:bg-white transition-all"
+                  />
+                  <button
+                    onClick={() => applyPromoCode(promoInput)}
+                    disabled={!promoInput.trim()}
+                    className="rounded-xl bg-brand-red px-5 py-2.5 text-xs font-bold text-white disabled:bg-zinc-200 disabled:text-zinc-400 hover:bg-red-700 transition-all active-scale"
+                  >
+                    Apply
+                  </button>
+                </div>
+                {promoTouched && promoError && (
+                  <p className="text-[10px] font-semibold text-brand-red ml-1">
+                    {promoError}
+                  </p>
+                )}
+                <div className="flex items-center gap-1.5 ml-1 pt-1">
+                  <Gift className="h-3.5 w-3.5 text-zinc-400" />
+                  <span className="text-[10px] text-zinc-400">
+                    Try <span className="font-bold text-foreground">NONZO10</span> for 10% off
+                  </span>
+                </div>
+              </div>
             </div>
           </div>
         )}

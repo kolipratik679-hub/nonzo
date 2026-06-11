@@ -1,10 +1,10 @@
 "use client";
 
-import React, { useState, use } from "react";
+import React, { useState, use, useEffect } from "react";
 import Link from "next/link";
 import Image from "next/image";
 import { useRouter } from "next/navigation";
-import { ArrowLeft, CheckCircle2, ShieldAlert, ShoppingBag } from "lucide-react";
+import { ArrowLeft, CheckCircle2, ShieldAlert, ShoppingBag, ArrowRight } from "lucide-react";
 import { PRODUCTS, CUT_TYPES, CutType } from "@/lib/mock-data";
 import { useCart } from "@/context/cart-context";
 
@@ -15,9 +15,30 @@ interface PageProps {
 export default function ProductDetailPage({ params }: PageProps) {
   const router = useRouter();
   const { id } = use(params);
-  const { addToCart } = useCart();
+  const { addToCart, cart, finalTotal } = useCart();
 
   const product = PRODUCTS.find((p) => p.id === id);
+
+  // Set browser title dynamically & append to recently viewed list
+  useEffect(() => {
+    if (product) {
+      document.title = `${product.name} | NONZO`;
+
+      if (typeof window !== "undefined") {
+        try {
+          const saved = localStorage.getItem("nonzo_recently_viewed");
+          let list: string[] = saved ? JSON.parse(saved) : [];
+          list = list.filter((pid) => pid !== product.id);
+          list.unshift(product.id);
+          // Keep only top 4 items
+          list = list.slice(0, 4);
+          localStorage.setItem("nonzo_recently_viewed", JSON.stringify(list));
+        } catch (e) {
+          console.error("Failed to update recently viewed list", e);
+        }
+      }
+    }
+  }, [product]);
 
   // Weight options to display: 250g, 500g, 1kg, 2kg
   const availableWeights = ["250g", "500g", "1kg", "2kg"];
@@ -98,6 +119,10 @@ export default function ProductDetailPage({ params }: PageProps) {
 
   const isOutOfStock = product.stockStatus === "Out Of Stock";
 
+  // Check if this product is in the cart
+  const isCurrentProductInCart = cart.some((item) => item._product.id === product.id);
+  const totalItems = cart.reduce((sum, item) => sum + item.quantity, 0);
+
   return (
     <div className="space-y-6 pt-4 pb-24">
       {/* Back Button Navigation Header */}
@@ -163,6 +188,16 @@ export default function ProductDetailPage({ params }: PageProps) {
             <p className="mt-1 text-xs text-zinc-400 italic font-medium">
               &quot;{product.tagline}&quot;
             </p>
+            {/* Live Price & Discount Badge */}
+            <div className="mt-3 flex items-baseline gap-2.5 flex-wrap">
+              <span className="text-lg font-black text-foreground">₹{unitPrice}</span>
+              <span className="text-xs text-zinc-400 line-through">₹{originalUnitPrice}</span>
+              {Math.round(((originalUnitPrice - unitPrice) / originalUnitPrice) * 100) > 0 && (
+                <span className="rounded-full bg-brand-red px-2 py-0.5 text-[9px] font-extrabold uppercase tracking-wide text-white">
+                  {Math.round(((originalUnitPrice - unitPrice) / originalUnitPrice) * 100)}% OFF
+                </span>
+              )}
+            </div>
           </div>
 
           <div className="border-t border-b border-border-gray/50 py-3.5">
@@ -276,31 +311,47 @@ export default function ProductDetailPage({ params }: PageProps) {
         />
       </div>
 
-      {/* Sticky Add To Cart Bottom Bar */}
-      <div className="fixed bottom-0 left-0 right-0 z-30 border-t border-border-gray bg-white py-3 px-4 shadow-[0_-8px_24px_rgba(0,0,0,0.06)] md:relative md:border-t-0 md:shadow-none md:p-0 md:bg-transparent">
-        <div className="mx-auto flex max-w-lg items-center justify-between gap-4 md:max-w-none md:justify-end md:gap-6">
-          {/* Live Price Summary */}
-          <div>
-            <span className="text-[10px] text-zinc-400 font-semibold block">Total Price</span>
-            <div className="flex items-center gap-1.5">
-              <span className="text-base font-black text-foreground">
-                ₹{unitPrice}
-              </span>
-              <span className="text-[11px] text-zinc-400 line-through">
-                ₹{originalUnitPrice}
-              </span>
-            </div>
-          </div>
-
-          {/* Sticky CTA Button */}
-          {isOutOfStock ? (
+      {/* Sticky Bottom Bar */}
+      <div className="fixed bottom-0 left-0 right-0 z-45 border-t border-zinc-800 bg-[#111111] py-3 px-4 shadow-[0_-8px_24px_rgba(0,0,0,0.3)] safe-bottom text-white md:relative md:border-t-0 md:shadow-none md:p-0 md:bg-transparent md:text-foreground">
+        {isOutOfStock ? (
+          <div className="mx-auto flex max-w-lg items-center justify-center md:max-w-none">
             <button
               disabled
-              className="flex-1 md:flex-none md:w-48 rounded-xl bg-zinc-200 py-3.5 text-xs font-extrabold text-zinc-400 cursor-not-allowed text-center"
+              className="w-full md:w-48 rounded-xl bg-zinc-800 py-3.5 text-xs font-extrabold text-zinc-500 cursor-not-allowed text-center"
             >
               Sold Out
             </button>
-          ) : (
+          </div>
+        ) : isCurrentProductInCart ? (
+          /* Case 2: Product already added to cart -> Show unified cart summary CTA */
+          <div className="mx-auto max-w-lg md:max-w-none">
+            <button
+              onClick={() => router.push("/cart")}
+              className="flex w-full items-center justify-center gap-2 rounded-xl bg-brand-red py-3.5 text-xs font-extrabold text-white hover:bg-red-700 active-scale shadow-md shadow-brand-red/20"
+            >
+              <span>{totalItems} {totalItems === 1 ? "Item" : "Items"}</span>
+              <span className="opacity-40">|</span>
+              <span>₹{finalTotal}</span>
+              <span className="opacity-40">|</span>
+              <span className="flex items-center gap-0.5">View Cart →</span>
+            </button>
+          </div>
+        ) : (
+          /* Case 3: Product NOT in cart -> Show Standard Add to Cart CTA */
+          <div className="mx-auto flex max-w-lg items-center justify-between gap-4 md:max-w-none md:justify-end md:gap-6">
+            {/* Live Price Summary */}
+            <div>
+              <span className="text-[10px] text-zinc-400 font-semibold block md:text-zinc-500">Total Price</span>
+              <div className="flex items-center gap-1.5">
+                <span className="text-base font-black text-white md:text-foreground">
+                  ₹{unitPrice}
+                </span>
+                <span className="text-[11px] text-zinc-500 line-through">
+                  ₹{originalUnitPrice}
+                </span>
+              </div>
+            </div>
+
             <button
               onClick={handleAddToCart}
               className="flex-grow md:flex-initial md:px-12 rounded-xl bg-brand-red py-3.5 text-xs font-extrabold text-white transition-all hover:bg-red-700 active-scale shadow-md shadow-brand-red/10 flex items-center justify-center gap-1.5"
@@ -316,8 +367,8 @@ export default function ProductDetailPage({ params }: PageProps) {
                 </>
               )}
             </button>
-          )}
-        </div>
+          </div>
+        )}
       </div>
     </div>
   );

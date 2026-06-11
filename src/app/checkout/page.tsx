@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { ArrowLeft, MapPin, Calendar, Clock, CheckCircle2, Truck, Banknote, Smartphone, CreditCard } from "lucide-react";
@@ -11,6 +11,10 @@ import { MOCK_SAVED_ADDRESSES } from "@/lib/mock-data";
 export default function CheckoutPage() {
   const router = useRouter();
   const { cart, subtotal, cleaningFee, deliveryFee, promoDiscount, finalTotal, clearCart } = useCart();
+
+  useEffect(() => {
+    document.title = "Checkout | NONZO";
+  }, []);
 
   const savings = cart.reduce(
     (sum, item) => sum + (item.originalPrice - item.price) * item.quantity,
@@ -36,11 +40,35 @@ export default function CheckoutPage() {
   });
   const [localAddresses, setLocalAddresses] = useState(MOCK_SAVED_ADDRESSES);
 
-  // Delivery Date & Slot state
+  // Load settings from localStorage with fallback defaults
+  const [adminSettings] = useState(() => {
+    if (typeof window !== "undefined") {
+      const saved = localStorage.getItem("nonzo_delivery_settings");
+      if (saved) {
+        try {
+          return JSON.parse(saved);
+        } catch (e) {
+          console.error("Failed to parse delivery settings", e);
+        }
+      }
+    }
+    return {
+      sameDayDelivery: true,
+      slots: [
+        { id: "slot-1", time: "8 AM – 10 AM", enabled: true, maxOrders: 15 },
+        { id: "slot-2", time: "10 AM – 12 PM", enabled: true, maxOrders: 15 },
+        { id: "slot-3", time: "5 PM – 9 PM", enabled: true, maxOrders: 15 }
+      ]
+    };
+  });
+
+  const today = new Date();
   const tomorrow = new Date();
   tomorrow.setDate(tomorrow.getDate() + 1);
-  const dayAfter = new Date();
-  dayAfter.setDate(dayAfter.getDate() + 2);
+  const day2 = new Date();
+  day2.setDate(day2.getDate() + 2);
+  const day3 = new Date();
+  day3.setDate(day3.getDate() + 3);
 
   const formatDate = (date: Date) => {
     return date.toLocaleDateString("en-IN", {
@@ -50,8 +78,13 @@ export default function CheckoutPage() {
     });
   };
 
-  const [deliveryDate, setDeliveryDate] = useState<string>("tomorrow"); // "tomorrow" | "dayAfter"
-  const [deliverySlot, setDeliverySlot] = useState<string>("8AM-12PM"); // "8AM-12PM" | "5PM-9PM"
+  // Default date Tomorrow is automatically selected
+  const [deliveryDate, setDeliveryDate] = useState<string>("Tomorrow"); 
+
+  const activeSlots = adminSettings.slots.filter((s: any) => s.enabled);
+  const [deliverySlot, setDeliverySlot] = useState<string>(
+    activeSlots[0]?.time || "8 AM – 10 AM"
+  );
   const [paymentMethod, setPaymentMethod] = useState<string>("cod"); // "cod" | "upi" | "card"
 
   // Order Placement state
@@ -86,6 +119,40 @@ export default function CheckoutPage() {
       .toString()
       .slice(-2)}`;
     
+    const selectedAddress = localAddresses.find((a) => a.id === selectedAddressId);
+    const newOrder = {
+      id: orderId,
+      date: new Date().toLocaleDateString("en-IN", {
+        day: "2-digit",
+        month: "short",
+        year: "numeric"
+      }),
+      status: "Confirmed & Preparing",
+      items: cart.map((item) => ({
+        name: item.name,
+        weight: item.weight,
+        cut: item.cutName,
+        quantity: item.quantity,
+        price: item.price
+      })),
+      total: finalTotal,
+      deliveryAddress: selectedAddress
+        ? `${selectedAddress.flat}, ${selectedAddress.area}, ${selectedAddress.city} - ${selectedAddress.pincode}`
+        : selectedLocation || "Ulwe, Navi Mumbai"
+    };
+
+    // Save to localStorage
+    if (typeof window !== "undefined") {
+      try {
+        const existing = localStorage.getItem("nonzo_placed_orders");
+        const orderList = existing ? JSON.parse(existing) : [];
+        orderList.unshift(newOrder);
+        localStorage.setItem("nonzo_placed_orders", JSON.stringify(orderList));
+      } catch (e) {
+        console.error("Failed to save order to localStorage", e);
+      }
+    }
+
     setPlacedOrderId(orderId);
     setIsOrderPlaced(true);
     
@@ -118,10 +185,15 @@ export default function CheckoutPage() {
             <div>
               <h4 className="text-xs font-bold text-foreground">Delivery Scheduled</h4>
               <p className="text-[11px] text-zinc-500 mt-0.5">
-                {deliveryDate === "tomorrow" ? formatDate(tomorrow) : formatDate(dayAfter)}
+                Date: {deliveryDate} ({
+                  deliveryDate === "Today" ? formatDate(today) :
+                  deliveryDate === "Tomorrow" ? formatDate(tomorrow) :
+                  deliveryDate === "Day +2" ? formatDate(day2) :
+                  formatDate(day3)
+                })
               </p>
               <p className="text-[11px] text-zinc-500">
-                Slot: {deliverySlot === "8AM-12PM" ? "Morning (8:00 AM - 12:00 PM)" : "Evening (5:00 PM - 9:00 PM)"}
+                Slot: {deliverySlot}
               </p>
             </div>
           </div>
@@ -146,7 +218,7 @@ export default function CheckoutPage() {
             Continue Shopping
           </button>
           <button
-            onClick={() => router.push("/profile")}
+            onClick={() => router.push("/orders")}
             className="w-full rounded-xl border border-border-gray bg-white py-4 text-xs font-extrabold text-zinc-700 transition-all hover:bg-light-gray active-scale"
           >
             Track Order Status
@@ -166,6 +238,15 @@ export default function CheckoutPage() {
       </div>
     );
   }
+
+  // Calculate dynamic dates list
+  const availableDates = [];
+  if (adminSettings.sameDayDelivery) {
+    availableDates.push({ label: "Today", value: "Today", dateObj: today });
+  }
+  availableDates.push({ label: "Tomorrow", value: "Tomorrow", dateObj: tomorrow });
+  availableDates.push({ label: "Day +2", value: "Day +2", dateObj: day2 });
+  availableDates.push({ label: "Day +3", value: "Day +3", dateObj: day3 });
 
   return (
     <div className="space-y-6 pt-4 pb-36 md:pb-12">
@@ -323,33 +404,27 @@ export default function CheckoutPage() {
           <span className="text-[10px] font-bold text-zinc-500 uppercase tracking-wide flex items-center gap-1">
             <Calendar className="h-3.5 w-3.5 text-brand-red" /> Select Date
           </span>
-          <div className="grid grid-cols-2 gap-2.5">
-            <button
-              onClick={() => setDeliveryDate("tomorrow")}
-              className={`rounded-xl border p-3.5 text-center text-xs font-bold transition-all active-scale ${
-                deliveryDate === "tomorrow"
-                  ? "border-brand-red bg-brand-red/5 text-brand-red"
-                  : "border-border-gray bg-white text-zinc-500"
-              }`}
-            >
-              Tomorrow
-              <span className="block text-[10px] font-medium text-zinc-400 mt-0.5">
-                {formatDate(tomorrow)}
-              </span>
-            </button>
-            <button
-              onClick={() => setDeliveryDate("dayAfter")}
-              className={`rounded-xl border p-3.5 text-center text-xs font-bold transition-all active-scale ${
-                deliveryDate === "dayAfter"
-                  ? "border-brand-red bg-brand-red/5 text-brand-red"
-                  : "border-border-gray bg-white text-zinc-500"
-              }`}
-            >
-              Day After
-              <span className="block text-[10px] font-medium text-zinc-400 mt-0.5">
-                {formatDate(dayAfter)}
-              </span>
-            </button>
+          <div className={`grid gap-2.5 ${adminSettings.sameDayDelivery ? "grid-cols-4" : "grid-cols-3"}`}>
+            {availableDates.map((d) => {
+              const isSelected = deliveryDate === d.value;
+              return (
+                <button
+                  key={d.value}
+                  type="button"
+                  onClick={() => setDeliveryDate(d.value)}
+                  className={`rounded-xl border p-2.5 text-center text-xs font-bold transition-all active-scale ${
+                    isSelected
+                      ? "border-brand-red bg-brand-red/5 text-brand-red"
+                      : "border-border-gray bg-white text-zinc-500 hover:border-zinc-300"
+                  }`}
+                >
+                  {d.label}
+                  <span className="block text-[9px] font-medium text-zinc-400 mt-0.5">
+                    {formatDate(d.dateObj)}
+                  </span>
+                </button>
+              );
+            })}
           </div>
         </div>
 
@@ -358,29 +433,30 @@ export default function CheckoutPage() {
           <span className="text-[10px] font-bold text-zinc-500 uppercase tracking-wide flex items-center gap-1">
             <Clock className="h-3.5 w-3.5 text-brand-red" /> Select Time Slot
           </span>
-          <div className="grid grid-cols-2 gap-2.5">
-            <button
-              onClick={() => setDeliverySlot("8AM-12PM")}
-              className={`rounded-xl border p-3.5 text-center text-xs font-bold transition-all active-scale ${
-                deliverySlot === "8AM-12PM"
-                  ? "border-brand-red bg-brand-red/5 text-brand-red"
-                  : "border-border-gray bg-white text-zinc-500"
-              }`}
-            >
-              08:00 AM - 12:00 PM
-              <span className="block text-[10px] font-medium text-zinc-400 mt-0.5">Morning Express</span>
-            </button>
-            <button
-              onClick={() => setDeliverySlot("5PM-9PM")}
-              className={`rounded-xl border p-3.5 text-center text-xs font-bold transition-all active-scale ${
-                deliverySlot === "5PM-9PM"
-                  ? "border-brand-red bg-brand-red/5 text-brand-red"
-                  : "border-border-gray bg-white text-zinc-500"
-              }`}
-            >
-              05:00 PM - 09:00 PM
-              <span className="block text-[10px] font-medium text-zinc-400 mt-0.5">Evening Fresh</span>
-            </button>
+          <div className="grid grid-cols-1 gap-2.5 sm:grid-cols-3">
+            {activeSlots.map((slot: any) => {
+              const isSelected = deliverySlot === slot.time;
+              return (
+                <button
+                  key={slot.id}
+                  type="button"
+                  onClick={() => setDeliverySlot(slot.time)}
+                  className={`rounded-xl border p-3.5 text-center text-xs font-bold transition-all active-scale ${
+                    isSelected
+                      ? "border-brand-red bg-brand-red/5 text-brand-red"
+                      : "border-border-gray bg-white text-zinc-500 hover:border-zinc-300"
+                  }`}
+                >
+                  {slot.time}
+                  <span className="block text-[9px] font-medium text-zinc-400 mt-0.5">
+                    Max Orders: {slot.maxOrders || 15}
+                  </span>
+                </button>
+              );
+            })}
+            {activeSlots.length === 0 && (
+              <p className="text-xs text-zinc-400 col-span-full py-2">No active slots available. Please contact support.</p>
+            )}
           </div>
         </div>
       </div>
@@ -470,19 +546,31 @@ export default function CheckoutPage() {
         </h2>
         
         <div className="space-y-3">
-          {cart.map((item) => (
-            <div key={item.id} className="flex justify-between items-start gap-2 text-xs">
-              <div>
-                <span className="font-extrabold text-foreground">{item.name}</span>
-                <span className="text-[10px] text-zinc-400 block mt-0.5">
-                  {item.weight} • {item.cutName} x {item.quantity}
-                </span>
+          {cart.map((item) => {
+            const itemDiscountPct = Math.round(
+              ((item.originalPrice - item.price) / item.originalPrice) * 100
+            );
+            return (
+              <div key={item.id} className="flex justify-between items-start gap-2 text-xs">
+                <div>
+                  <span className="font-extrabold text-foreground">{item.name}</span>
+                  <span className="text-[10px] text-zinc-400 block mt-0.5">
+                    {item.weight} • {item.cutName} x {item.quantity}
+                  </span>
+                </div>
+                <div className="text-right">
+                  <span className="font-bold text-foreground">
+                    ₹{item.price * item.quantity}
+                  </span>
+                  {itemDiscountPct > 0 && (
+                    <span className="block text-[9px] font-extrabold text-brand-red mt-0.5">
+                      ({itemDiscountPct}% OFF)
+                    </span>
+                  )}
+                </div>
               </div>
-              <span className="font-bold text-foreground">
-                ₹{item.price * item.quantity}
-              </span>
-            </div>
-          ))}
+            );
+          })}
         </div>
 
         <div className="border-t border-border-gray/50 pt-3 space-y-2">

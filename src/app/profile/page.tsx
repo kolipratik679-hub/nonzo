@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import {
@@ -24,6 +24,7 @@ import {
   AlertTriangle,
   Flag,
   Hash,
+  Settings,
 } from "lucide-react";
 import { MOCK_SAVED_ADDRESSES, MOCK_ORDERS } from "@/lib/mock-data";
 
@@ -119,6 +120,10 @@ export default function ProfilePage() {
     "personal"
   );
   const [showLogoutModal, setShowLogoutModal] = useState<boolean>(false);
+
+  useEffect(() => {
+    document.title = "Profile | NONZO";
+  }, []);
 
   // Personal info state
   const [profile, setProfile] = useState({
@@ -767,21 +772,21 @@ export default function ProfilePage() {
           </AccordionSection>
         </div>
 
-        {/* Admin Image Portal navigation card */}
+        {/* Admin Dashboard Control Panel card */}
         <Link
-          href="/admin/images"
+          href="/admin"
           className="flex items-center justify-between rounded-2xl border border-zinc-200 bg-zinc-50 p-4 hover:bg-zinc-100 hover:border-zinc-300 transition-all active-scale"
         >
           <div className="flex items-center gap-3">
             <div className="rounded-xl bg-white border border-zinc-200 p-2.5">
-              <ImageIcon className="h-5 w-5 text-brand-red" />
+              <Settings className="h-5 w-5 text-brand-red" />
             </div>
             <div>
               <h3 className="text-xs font-bold text-foreground">
-                Admin Image Upload Portal
+                Admin Dashboard Control Panel
               </h3>
               <p className="text-[10px] text-zinc-400 mt-0.5">
-                Simulated dashboard for merchant uploads and asset reviews.
+                Manage delivery slots, settings, and homepage hero banner carousels.
               </p>
             </div>
           </div>
