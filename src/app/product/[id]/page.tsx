@@ -2,6 +2,7 @@
 
 import React, { useState, use } from "react";
 import Link from "next/link";
+import Image from "next/image";
 import { useRouter } from "next/navigation";
 import { ArrowLeft, CheckCircle2, ShieldAlert, ShoppingBag } from "lucide-react";
 import { PRODUCTS, CUT_TYPES, CutType } from "@/lib/mock-data";
@@ -123,10 +124,13 @@ export default function ProductDetailPage({ params }: PageProps) {
         {/* Left Side: Images Gallery */}
         <div className="space-y-3">
           <div className="relative aspect-square w-full overflow-hidden rounded-2xl border border-border-gray bg-light-gray shadow-sm">
-            <img
+            <Image
               src={product.images[activeImageIdx] || product.image}
               alt={product.name}
-              className="h-full w-full object-cover transition-all"
+              fill
+              sizes="(min-width: 768px) 50vw, 100vw"
+              className="object-cover transition-all"
+              priority
             />
           </div>
           {/* Thumbnails */}
@@ -140,7 +144,7 @@ export default function ProductDetailPage({ params }: PageProps) {
                     activeImageIdx === idx ? "border-brand-red" : "border-border-gray hover:border-zinc-300"
                   }`}
                 >
-                  <img src={imgUrl} alt={`thumb-${idx}`} className="h-full w-full object-cover" />
+                  <Image src={imgUrl} alt={`thumb-${idx}`} fill sizes="64px" className="object-cover" />
                 </button>
               ))}
             </div>

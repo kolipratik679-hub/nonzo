@@ -27,7 +27,6 @@ export default function CartPage() {
     removeFromCart,
     clearCart,
     promoCode,
-    setPromoCode,
     applyPromoCode,
     promoDiscount,
     removePromoCode,

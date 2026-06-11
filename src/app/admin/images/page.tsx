@@ -276,6 +276,7 @@ export default function AdminImagePortal() {
             >
               {/* Preview Image */}
               <div className="relative h-16 w-16 shrink-0 overflow-hidden rounded-xl bg-light-gray border border-border-gray/50">
+                {/* eslint-disable-next-line @next/next/no-img-element -- Upload previews can use blob: object URLs. */}
                 <img
                   src={file.previewUrl}
                   alt={file.name}

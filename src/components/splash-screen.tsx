@@ -11,20 +11,27 @@ export function SplashScreen() {
     // Check if splash was already shown in the current session
     const hasSeenSplash = sessionStorage.getItem("nonzo_splash_seen");
     if (!hasSeenSplash) {
-      setShouldRender(true);
-      setIsVisible(true);
       sessionStorage.setItem("nonzo_splash_seen", "true");
+
+      let removeTimer: ReturnType<typeof setTimeout> | undefined;
+      const showTimer = setTimeout(() => {
+        setShouldRender(true);
+        setIsVisible(true);
+      }, 0);
 
       // Total splash duration: 2.5s animation + 0.3s DOM removal buffer
       const timer = setTimeout(() => {
         setIsVisible(false);
-        const removeTimer = setTimeout(() => {
+        removeTimer = setTimeout(() => {
           setShouldRender(false);
         }, 400);
-        return () => clearTimeout(removeTimer);
       }, 2500);
 
-      return () => clearTimeout(timer);
+      return () => {
+        clearTimeout(showTimer);
+        clearTimeout(timer);
+        if (removeTimer) clearTimeout(removeTimer);
+      };
     }
   }, []);
 
