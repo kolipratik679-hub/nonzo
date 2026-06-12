@@ -27,11 +27,11 @@ export interface Product {
 }
 
 export const CATEGORIES = [
-  { id: "fish", name: "Fish", iconName: "Fish" },
-  { id: "prawns", name: "Prawns", iconName: "Waves" },
-  { id: "crabs", name: "Crabs", iconName: "Shell" },
-  { id: "shellfish", name: "Shellfish", iconName: "Anchor" },
-  { id: "seafood", name: "Seafood", iconName: "Compass" }
+  { id: "fish",     name: "Fish",      iconName: "Fish",    image: "/images/categories/fish.png" },
+  { id: "prawns",   name: "Prawns",    iconName: "Waves",   image: "/images/categories/prawns.png" },
+  { id: "crabs",    name: "Crabs",     iconName: "Shell",   image: "/images/categories/crab.png" },
+  { id: "shellfish",name: "Shellfish", iconName: "Anchor",  image: "/images/categories/shellfish.png" },
+  { id: "seafood",  name: "Seafood",   iconName: "Compass", image: "/images/categories/seafoods.png" }
 ];
 
 export const CUT_TYPES: CutType[] = [
@@ -104,7 +104,7 @@ export const PRODUCTS: Product[] = [
     tagline: "Colossal, juicy freshwater prawns",
     category: "Prawns",
     image: "/images/TIGER PRAWNS.jpg",
-    images: ["/images/TIGER PRAWNS.jpg", "/images/TIGER PRAWNS.jpg"],
+    images: ["/images/TIGER PRAWNS.jpg", "/images/large prawns.jpg", "/images/small prawns.webp"],
     description: "These premium Tiger Prawns are known for their sweet, firm meat and spectacular striping. Freshly caught and immediately chilled, they are perfect for butter-garlic fry or grilling.",
     freshnessInfo: "Caught 6 hours ago off the coast of Alibaug. Cleaned, de-veined, and kept at 0-4°C.",
     stockStatus: "In Stock",
@@ -121,7 +121,7 @@ export const PRODUCTS: Product[] = [
     tagline: "Richly flavored local delicacy",
     category: "Fish",
     image: "/images/black pomfret.jpg",
-    images: ["/images/black pomfret.jpg", "/images/black pomfret.jpg"],
+    images: ["/images/black pomfret.jpg", "/images/silver pompret.jpeg"],
     description: "Black Pomfret (Halwa) is a coastal favorite in Maharashtra. With a distinct rich flavor, medium texture, and minimal bones, it holds together beautifully in pan-fries and curries.",
     freshnessInfo: "Sourced directly from Sasoon Dock daily. Zero preservatives.",
     stockStatus: "In Stock",
@@ -138,7 +138,7 @@ export const PRODUCTS: Product[] = [
     tagline: "Ultra-premium, buttery, melting texture",
     category: "Fish",
     image: "/images/silver pompret.jpeg",
-    images: ["/images/silver pompret.jpeg", "/images/silver pompret.jpeg"],
+    images: ["/images/silver pompret.jpeg", "/images/black pomfret.jpg"],
     description: "The crown jewel of Indian seafood. Silver Pomfret is celebrated for its incredibly delicate, white meat and buttery taste. Ideal for tandoori baking or classic rava frying.",
     freshnessInfo: "Fresh caught via hook-and-line. Delivered within 12 hours of catch.",
     stockStatus: "Low Stock",
@@ -155,7 +155,7 @@ export const PRODUCTS: Product[] = [
     tagline: "Crispy fry specialist of Mumbai",
     category: "Fish",
     image: "/images/Bombil-main.jpg",
-    images: ["/images/Bombil-main.jpg", "/images/Bombil-main.jpg"],
+    images: ["/images/Bombil-main.jpg", "/images/mandeli.webp", "/images/Khapri-1.jpg"],
     description: "Bombay Duck (Bombil) is famous for its high moisture content and delicate texture. When pressed and coated with semolina (rava), it transforms into the crispiest, melting-soft treat.",
     freshnessInfo: "Direct from Versova dock. Cleaned, flattened, and moisture-controlled.",
     stockStatus: "In Stock",
@@ -172,7 +172,7 @@ export const PRODUCTS: Product[] = [
     tagline: "Rich in Omega-3, meaty steak cut",
     category: "Fish",
     image: "/images/ravas - indian salmon.jpg",
-    images: ["/images/ravas - indian salmon.jpg", "/images/ravas - indian salmon.jpg"],
+    images: ["/images/ravas - indian salmon.jpg", "/images/hilsa.jpg", "/images/baramumdi - asian seabass.jpg"],
     description: "Rawas is one of the most popular fish in India. It is highly nutritious, packed with Omega-3 fatty acids, and has a pinkish-white firm flesh with a mild flavor.",
     freshnessInfo: "Caught off the Konkan coast. Hand-selected for weight and oil content.",
     stockStatus: "In Stock",
@@ -189,7 +189,7 @@ export const PRODUCTS: Product[] = [
     tagline: "Indulgent, sweet tail meat",
     category: "Seafood",
     image: "/images/lobster.jpg",
-    images: ["/images/lobster.jpg", "/images/lobster.jpg"],
+    images: ["/images/lobster.jpg", "/images/octopus.png"],
     description: "Premium cold-chain harvested Rock Lobster. Rich, sweet meat in the tail makes it a luxury dining experience. Ideal for baking with cheese or grilling with lemon butter.",
     freshnessInfo: "Live-chilled immediately at harvest. Extremely high shell-to-meat ratio.",
     stockStatus: "Low Stock",
@@ -205,7 +205,7 @@ export const PRODUCTS: Product[] = [
     tagline: "Huge claws with sweet, dense meat",
     category: "Crabs",
     image: "/images/mud crab.jpg",
-    images: ["/images/mud crab.jpg", "/images/mud crab.jpg"],
+    images: ["/images/mud crab.jpg", "/images/sea mud crab.jpg", "/images/deep sea blue crab.jpg"],
     description: "Mud Crabs are harvested from estuarine mangroves. They are prized for their heavy, meat-filled claws and rich, savory roe. Best cooked in thick spicy masala or Singapore style.",
     freshnessInfo: "Harvested live from mangrove farms in coastal Maharashtra.",
     stockStatus: "In Stock",
@@ -221,7 +221,7 @@ export const PRODUCTS: Product[] = [
     tagline: "Delicate, sweet coastal blue crab",
     category: "Crabs",
     image: "/images/sea crab.jpg",
-    images: ["/images/sea crab.jpg", "/images/sea crab.jpg"],
+    images: ["/images/sea crab.jpg", "/images/deep sea blue crab.jpg", "/images/sea mud crab.jpg"],
     description: "Blue Sea Crabs are saltwater crabs with a sweeter, lighter taste profile compared to mud crabs. They make an exceptional traditional Konkani crab curry.",
     freshnessInfo: "Caught daily by local artisanal fishermen.",
     stockStatus: "In Stock",
@@ -237,7 +237,7 @@ export const PRODUCTS: Product[] = [
     tagline: "Flaky, white meat, extremely versatile",
     category: "Fish",
     image: "/images/baramumdi - asian seabass.jpg",
-    images: ["/images/baramumdi - asian seabass.jpg", "/images/baramumdi - asian seabass.jpg"],
+    images: ["/images/baramumdi - asian seabass.jpg", "/images/big-grouper.webp", "/images/grouper.jpg"],
     description: "Known locally as Jitada, Barramundi is celebrated for its clean, mild taste and large, moist flakes. Excellent for steaming, baking, or frying.",
     freshnessInfo: "Grown in pure brackish waters, harvested at dawn.",
     stockStatus: "In Stock",
@@ -254,7 +254,7 @@ export const PRODUCTS: Product[] = [
     tagline: "Healthy, oily fish with robust flavor",
     category: "Fish",
     image: "/images/BANGDA.jpeg",
-    images: ["/images/BANGDA.jpeg", "/images/BANGDA.jpeg"],
+    images: ["/images/BANGDA.jpeg", "/images/mandeli.webp"],
     description: "Bangda is a staple along the Konkan coast. Loaded with Omega-3 and proteins, its strong flavor pairs wonderfully with spicy, acidic, and coconut-based marinades.",
     freshnessInfo: "Landed at Sasoon dock, flash-iced within minutes.",
     stockStatus: "In Stock",
@@ -270,7 +270,7 @@ export const PRODUCTS: Product[] = [
     tagline: "Meaty, deep-red sashimi-grade steaks",
     category: "Fish",
     image: "/images/tuna.webp",
-    images: ["/images/tuna.webp", "/images/tuna.webp"],
+    images: ["/images/tuna.webp", "/images/hilsa.jpg", "/images/ravas - indian salmon.jpg"],
     description: "Meaty Yellowfin Tuna has a firm texture and deep flavor. Perfect for quick searing on a hot pan or grill, keeping the center tender and moist.",
     freshnessInfo: "Deep-sea caught. Cleaned and temperature-locked at -2°C.",
     stockStatus: "Low Stock",
@@ -287,13 +287,77 @@ export const PRODUCTS: Product[] = [
     tagline: "Fresh, briny, ocean-fresh treats",
     category: "Shellfish",
     image: "/images/oyester.jpg",
-    images: ["/images/oyester.jpg", "/images/oyester.jpg"],
+    images: ["/images/oyester.jpg"],
     description: "Freshly harvested Coastal Rock Oysters. Known for their distinct mineral-rich, briny flavor. Serve chilled with a squeeze of fresh lemon and a dash of hot sauce.",
     freshnessInfo: "Harvested from clean shellfish beds under strict water quality monitoring.",
     stockStatus: "Out Of Stock",
     weightOptions: [
       { weight: "250g", price: 399, originalPrice: 450 },
       { weight: "500g", price: 749, originalPrice: 899 }
+    ],
+    allowedCuts: ["whole"]
+  },
+  {
+    id: "hilsa",
+    name: "Hilsa (Ilish)",
+    tagline: "Bengal's prized silver fish, omega-rich",
+    category: "Fish",
+    image: "/images/hilsa.jpg",
+    images: ["/images/hilsa.jpg", "/images/ravas - indian salmon.jpg"],
+    description: "Hilsa, known as the King of Fish, is prized across Bengal and Bangladesh for its rich, oily flavour and melt-in-mouth texture. A rare seasonal delicacy.",
+    freshnessInfo: "River-caught and flash-chilled within 4 hours. Available in limited quantities.",
+    stockStatus: "Low Stock",
+    weightOptions: [
+      { weight: "500g", price: 699, originalPrice: 850 },
+      { weight: "1kg", price: 1299, originalPrice: 1600 }
+    ],
+    allowedCuts: ["whole", "curry-cut", "steak-cut"]
+  },
+  {
+    id: "sole-fish",
+    name: "Sole Fish (Lepa)",
+    tagline: "Delicate flatfish, perfect for light fry",
+    category: "Fish",
+    image: "/images/sole fish - lepa.jpg",
+    images: ["/images/sole fish - lepa.jpg", "/images/Khapri-1.jpg"],
+    description: "Sole fish, locally called Lepa, is a flat, white-fleshed fish with a mild, clean flavour. Excellent for a quick shallow fry or a light coastal curry.",
+    freshnessInfo: "Caught from shallow coastal waters. Cleaned and chilled same day.",
+    stockStatus: "In Stock",
+    weightOptions: [
+      { weight: "250g", price: 199, originalPrice: 249 },
+      { weight: "500g", price: 379, originalPrice: 449 }
+    ],
+    allowedCuts: ["whole", "fillet"]
+  },
+  {
+    id: "mandeli",
+    name: "Mandeli (Anchovies)",
+    tagline: "Crispy fried coastal snack fish",
+    category: "Fish",
+    image: "/images/mandeli.webp",
+    images: ["/images/mandeli.webp", "/images/Khapri-1.jpg"],
+    description: "Mandeli are small, silver anchovies loved along the Konkan coast. When fried in a crispy semolina batter they become an irresistible snack or side dish.",
+    freshnessInfo: "Daily catch from Mumbai coastal waters. Cleaned and delivered fresh.",
+    stockStatus: "In Stock",
+    weightOptions: [
+      { weight: "250g", price: 129, originalPrice: 160 },
+      { weight: "500g", price: 239, originalPrice: 290 }
+    ],
+    allowedCuts: ["whole"]
+  },
+  {
+    id: "octopus",
+    name: "Fresh Octopus",
+    tagline: "Tender, char-grilled delicacy",
+    category: "Seafood",
+    image: "/images/octopus.png",
+    images: ["/images/octopus.png", "/images/lobster.jpg"],
+    description: "Fresh octopus with a surprisingly tender texture when slow-cooked or pressure-cooked. Exceptional when marinated with lemon and char-grilled or stir-fried.",
+    freshnessInfo: "Deep-sea harvested and cleaned immediately. Limited seasonal availability.",
+    stockStatus: "Low Stock",
+    weightOptions: [
+      { weight: "500g", price: 499, originalPrice: 599 },
+      { weight: "1kg", price: 949, originalPrice: 1100 }
     ],
     allowedCuts: ["whole"]
   }

@@ -22,12 +22,34 @@ const geistMono = Geist_Mono({
 export const metadata: Metadata = {
   title: "NONZO | Eat Better. Live Better.",
   description:
-    "Premium cold-chain seafood delivery straight from sustainable coastal waters. Preservative-free, fresh fish, prawns, crabs, and shellfish.",
+    "Premium Fresh Fish & Seafood Delivery in Ulwe, Navi Mumbai. 100% preservative-free, cold-chain maintained fish, prawns, crabs & shellfish.",
+  keywords: ["fresh fish delivery", "seafood delivery", "Ulwe", "Navi Mumbai", "NONZO", "fish online", "prawns delivery"],
+  authors: [{ name: "NONZO Seafoods" }],
   icons: {
-    icon: "/NONZO-LOGO.png",
+    icon: [
+      { url: "/NONZO-LOGO.png", type: "image/png" },
+    ],
     shortcut: "/NONZO-LOGO.png",
     apple: "/NONZO-LOGO.png",
-  }
+    other: [
+      { rel: "apple-touch-icon", url: "/NONZO-LOGO.png" },
+    ],
+  },
+  manifest: "/manifest.json",
+  openGraph: {
+    title: "NONZO | Eat Better. Live Better.",
+    description: "Premium Fresh Fish & Seafood Delivery in Ulwe, Navi Mumbai.",
+    siteName: "NONZO",
+    images: [{ url: "/NONZO-LOGO.png", width: 800, height: 600, alt: "NONZO Logo" }],
+    locale: "en_IN",
+    type: "website",
+  },
+  twitter: {
+    card: "summary",
+    title: "NONZO | Eat Better. Live Better.",
+    description: "Premium Fresh Fish & Seafood Delivery in Ulwe, Navi Mumbai.",
+    images: ["/NONZO-LOGO.png"],
+  },
 };
 
 export const viewport: Viewport = {
@@ -36,7 +58,9 @@ export const viewport: Viewport = {
   maximumScale: 1,
   userScalable: false,
   viewportFit: "cover",
+  themeColor: "#111111",
 };
+
 
 export default function RootLayout({
   children,

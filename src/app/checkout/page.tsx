@@ -461,7 +461,38 @@ export default function CheckoutPage() {
         </div>
       </div>
 
-      {/* 3. Payment Method UI */}
+      {/* 3. Checkout Confidence Block — summary before payment */}
+      {selectedAddressId && (
+        <div className="rounded-2xl border border-emerald-100 bg-emerald-50/60 p-4 space-y-3">
+          <h2 className="text-xs font-bold uppercase tracking-wider text-emerald-700 flex items-center gap-1.5">
+            <CheckCircle2 className="h-4 w-4" />
+            Delivering To
+          </h2>
+          <div className="space-y-2">
+            {(() => {
+              const addr = localAddresses.find((a) => a.id === selectedAddressId);
+              return addr ? (
+                <div className="flex items-start gap-2">
+                  <MapPin className="h-4 w-4 shrink-0 text-emerald-600 mt-0.5" />
+                  <div>
+                    <span className="text-xs font-bold text-foreground block">{addr.fullName}</span>
+                    <span className="text-[11px] text-zinc-500">{addr.flat}, {addr.area}, {addr.city} – {addr.pincode}</span>
+                  </div>
+                </div>
+              ) : null;
+            })()}
+            <div className="flex items-center gap-2">
+              <Calendar className="h-4 w-4 shrink-0 text-emerald-600" />
+              <span className="text-xs text-zinc-600 font-semibold">
+                {deliveryDate} &bull; {deliverySlot}
+              </span>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* 4. Payment Method UI */}
+
       <div className="rounded-2xl border border-border-gray bg-white p-4 space-y-3.5 shadow-sm">
         <h2 className="text-xs font-bold uppercase tracking-wider text-zinc-400">
           Payment Method

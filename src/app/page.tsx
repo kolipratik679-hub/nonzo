@@ -37,14 +37,6 @@ const CATEGORY_GRADIENTS: Record<string, { from: string; to: string; iconBg: str
   seafood:  { from: "from-teal-50",   to: "to-teal-100/60",   iconBg: "bg-teal-100",   iconColor: "text-teal-600" },
 };
 
-const CATEGORY_ACTIVE: Record<string, { bg: string; iconColor: string; textColor: string }> = {
-  fish:     { bg: "bg-sky-600",    iconColor: "text-white", textColor: "text-sky-700" },
-  prawns:   { bg: "bg-orange-500", iconColor: "text-white", textColor: "text-orange-600" },
-  crabs:    { bg: "bg-red-600",    iconColor: "text-white", textColor: "text-red-700" },
-  shellfish:{ bg: "bg-purple-600", iconColor: "text-white", textColor: "text-purple-700" },
-  seafood:  { bg: "bg-teal-600",   iconColor: "text-white", textColor: "text-teal-700" },
-};
-
 export default function HomePage() {
   const router = useRouter();
   const [selectedCategory, setSelectedCategory] = useState<string | null>(null);
@@ -86,6 +78,15 @@ export default function HomePage() {
           imageUrl: "/images/black pomfret.jpg",
           destinationType: "category",
           destinationValue: "Fish",
+          isActive: true,
+        },
+        {
+          id: "banner-3",
+          title: "Premium Mud Crabs",
+          subtitle: "Harvested fresh from mangrove farms daily.",
+          imageUrl: "/images/mud crab.jpg",
+          destinationType: "category",
+          destinationValue: "Crabs",
           isActive: true,
         },
       ];
@@ -199,6 +200,24 @@ export default function HomePage() {
             );
           })}
 
+          {/* Prev/Next Arrows */}
+          {banners.length > 1 && (
+            <>
+              <button
+                onClick={(e) => { e.stopPropagation(); setCurrentSlide((prev) => (prev - 1 + banners.length) % banners.length); }}
+                className="absolute left-3 top-1/2 -translate-y-1/2 z-20 hidden md:flex h-9 w-9 items-center justify-center rounded-full bg-black/30 backdrop-blur text-white hover:bg-black/50 transition-all"
+              >
+                <ChevronLeft className="h-5 w-5" />
+              </button>
+              <button
+                onClick={(e) => { e.stopPropagation(); setCurrentSlide((prev) => (prev + 1) % banners.length); }}
+                className="absolute right-3 top-1/2 -translate-y-1/2 z-20 hidden md:flex h-9 w-9 items-center justify-center rounded-full bg-black/30 backdrop-blur text-white hover:bg-black/50 transition-all"
+              >
+                <ChevronRight className="h-5 w-5" />
+              </button>
+            </>
+          )}
+
           {/* Dots Indicator */}
           {banners.length > 1 && (
             <div className="absolute bottom-4 left-1/2 -translate-x-1/2 z-20 flex gap-2">
@@ -219,7 +238,7 @@ export default function HomePage() {
         </div>
       )}
 
-      {/* 3. Shop by Category — Upgraded horizontal list / grid */}
+      {/* 3. Shop by Category — Premium image-based cards */}
       <div className="space-y-4">
         <div className="flex items-center justify-between">
           <h2 className="text-xs font-black uppercase tracking-wider text-zinc-400">
@@ -235,46 +254,57 @@ export default function HomePage() {
           )}
         </div>
 
-        {/* Upgraded Premium category cards */}
-        <div className="flex gap-3.5 overflow-x-auto pb-3 no-scrollbar scroll-smooth snap-x md:grid md:grid-cols-5 md:gap-5 md:overflow-visible md:pb-0">
+        {/* Premium category image cards */}
+        <div className="flex gap-3 overflow-x-auto pb-3 no-scrollbar scroll-smooth snap-x md:grid md:grid-cols-5 md:gap-4 md:overflow-visible md:pb-0">
           {CATEGORIES.map((cat) => {
             const isSelected =
               selectedCategory?.toLowerCase() === cat.name.toLowerCase();
-            const Icon = CATEGORY_ICONS[cat.iconName] ?? Fish;
-            const gradient = CATEGORY_GRADIENTS[cat.id];
-            const active = CATEGORY_ACTIVE[cat.id];
 
             return (
               <button
                 key={cat.id}
                 onClick={() => handleCategoryClick(cat.name)}
-                className={`group flex shrink-0 snap-start flex-col items-center gap-3 rounded-2xl border p-5 transition-all duration-300 active-scale md:p-6.5 ${
+                style={{ minWidth: "120px" }}
+                className={`group relative flex shrink-0 snap-start flex-col overflow-hidden rounded-2xl border transition-all duration-300 active-scale md:min-w-0 ${
                   isSelected
-                    ? `border-transparent bg-gradient-to-br ${gradient.from} ${gradient.to} shadow-md ring-2 ring-brand-red/10`
-                    : "border-zinc-200 bg-white hover:border-brand-red/20 hover:shadow-md"
+                    ? "border-brand-red shadow-lg shadow-brand-red/10 ring-2 ring-brand-red/20"
+                    : "border-zinc-200 hover:border-brand-red/30 hover:shadow-md hover:shadow-zinc-200/80"
                 }`}
-                style={{ minWidth: "125px" }}
               >
-                <div
-                  className={`flex h-14 w-14 items-center justify-center rounded-2xl transition-all duration-300 group-hover:scale-105 md:h-16 md:w-16 ${
-                    isSelected
-                      ? `${active.bg} shadow-md`
-                      : `${gradient.iconBg} group-hover:brightness-95`
-                  }`}
-                >
-                  <Icon
-                    className={`h-7 w-7 transition-colors md:h-8 md:w-8 ${
-                      isSelected ? active.iconColor : gradient.iconColor
+                {/* Image container */}
+                <div className="relative w-full aspect-[4/3] overflow-hidden bg-zinc-100">
+                  <Image
+                    src={cat.image}
+                    alt={cat.name}
+                    fill
+                    sizes="(max-width: 768px) 120px, 20vw"
+                    className={`object-cover transition-all duration-500 ${
+                      isSelected
+                        ? "scale-105 brightness-90"
+                        : "group-hover:scale-105"
                     }`}
                   />
+                  {/* Active overlay */}
+                  {isSelected && (
+                    <div className="absolute inset-0 bg-brand-red/20 flex items-center justify-center">
+                      <div className="rounded-full bg-brand-red p-1.5">
+                        <svg className="h-3.5 w-3.5 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={3}>
+                          <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
+                        </svg>
+                      </div>
+                    </div>
+                  )}
                 </div>
-                <span
-                  className={`text-xs font-extrabold tracking-wide transition-colors ${
-                    isSelected ? active.textColor : "text-zinc-700 group-hover:text-brand-red"
-                  }`}
-                >
-                  {cat.name}
-                </span>
+                {/* Category title */}
+                <div className={`w-full px-3 py-2.5 text-center transition-colors ${
+                  isSelected ? "bg-brand-red/5" : "bg-white"
+                }`}>
+                  <span className={`text-[11px] font-extrabold tracking-wide transition-colors ${
+                    isSelected ? "text-brand-red" : "text-zinc-700 group-hover:text-brand-red"
+                  }`}>
+                    {cat.name}
+                  </span>
+                </div>
               </button>
             );
           })}
@@ -329,7 +359,7 @@ export default function HomePage() {
             </div>
           </div>
 
-          {/* 6. Recently Viewed */}
+          {/* 6. Recently Viewed — only if user viewed products */}
           {recentlyViewed.length > 0 && (
             <div className="space-y-4">
               <h2 className="flex items-center gap-1.5 text-xs font-black uppercase tracking-wider text-zinc-400">
@@ -346,53 +376,61 @@ export default function HomePage() {
             </div>
           )}
 
-          {/* 7. Buy Again */}
-          <div className="space-y-4">
-            <h2 className="flex items-center gap-1.5 text-xs font-black uppercase tracking-wider text-zinc-400">
-              <RotateCcw className="h-4 w-4 text-brand-red" />
-              Buy Again
-            </h2>
-            <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-              {buyAgainProducts.map((product) => {
-                const defaultOption = product.weightOptions[0];
-                return (
-                  <div
-                    key={product.id}
-                    onClick={() => router.push(`/product/${product.id}`)}
-                    className="flex cursor-pointer items-center justify-between rounded-2xl border border-border-gray bg-white p-3.5 transition-all hover:border-zinc-300 hover:shadow-sm active-scale"
-                  >
-                    <div className="flex items-center gap-3">
-                      <div className="relative h-12 w-12 shrink-0 overflow-hidden rounded-xl bg-light-gray">
-                        <Image
-                          src={product.image}
-                          alt={product.name}
-                          fill
-                          sizes="48px"
-                          className="object-cover"
-                        />
+          {/* 7. Buy Again — only for returning users (has recently viewed items) */}
+          {recentlyViewed.length > 0 && (
+            <div className="space-y-4">
+              <h2 className="flex items-center gap-1.5 text-xs font-black uppercase tracking-wider text-zinc-400">
+                <RotateCcw className="h-4 w-4 text-brand-red" />
+                Buy Again
+              </h2>
+              <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+                {buyAgainProducts.map((product) => {
+                  const defaultOption = product.weightOptions[0];
+                  const discountPct = Math.round(((defaultOption.originalPrice - defaultOption.price) / defaultOption.originalPrice) * 100);
+                  return (
+                    <div
+                      key={product.id}
+                      onClick={() => router.push(`/product/${product.id}`)}
+                      className="flex cursor-pointer items-center justify-between rounded-2xl border border-border-gray bg-white p-3.5 transition-all hover:border-zinc-300 hover:shadow-sm active-scale"
+                    >
+                      <div className="flex items-center gap-3">
+                        <div className="relative h-12 w-12 shrink-0 overflow-hidden rounded-xl bg-light-gray">
+                          <Image
+                            src={product.image}
+                            alt={product.name}
+                            fill
+                            sizes="48px"
+                            className="object-cover"
+                          />
+                        </div>
+                        <div>
+                          <h4 className="text-xs font-bold text-foreground">
+                            {product.name}
+                          </h4>
+                          <span className="text-[10px] text-zinc-400 mt-0.5 block">
+                            Last: Whole Fish · {defaultOption.weight}
+                          </span>
+                        </div>
                       </div>
-                      <div>
-                        <h4 className="text-xs font-bold text-foreground">
-                          {product.name}
-                        </h4>
-                        <span className="text-[10px] text-zinc-400 mt-0.5 block">
-                          Last: Whole Fish · {defaultOption.weight}
+                      <div className="flex items-center gap-2">
+                        <div className="text-right">
+                          <span className="text-xs font-black text-foreground block">
+                            ₹{defaultOption.price}
+                          </span>
+                          {discountPct > 0 && (
+                            <span className="text-[9px] font-bold text-brand-red">{discountPct}% OFF</span>
+                          )}
+                        </div>
+                        <span className="rounded-lg border border-brand-red/10 bg-brand-red/5 px-3 py-1.5 text-[10px] font-bold text-brand-red uppercase">
+                          Reorder
                         </span>
                       </div>
                     </div>
-                    <div className="flex items-center gap-2">
-                      <span className="text-xs font-black text-foreground">
-                        ₹{defaultOption.price}
-                      </span>
-                      <span className="rounded-lg border border-brand-red/10 bg-brand-red/5 px-3 py-1.5 text-[10px] font-bold text-brand-red uppercase">
-                        Reorder
-                      </span>
-                    </div>
-                  </div>
-                );
-              })}
+                  );
+                })}
+              </div>
             </div>
-          </div>
+          )}
 
           {/* 8. Why NONZO */}
           <div className="space-y-4 pt-2">
