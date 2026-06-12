@@ -1,7 +1,8 @@
 "use client";
+export const dynamic = "force-dynamic";
 
 import React, { createContext, useContext, useState, useEffect } from "react";
-import { Product, CutType, CUT_TYPES } from "@/lib/mock-data";
+import { Product, CutType, CUT_TYPES, PRODUCTS } from "@/lib/mock-data";
 
 // ── Weight Pricing Helpers (Dynamic Pricing) ──────────────────────
 const parseWeightToGrams = (w: string): number => {
@@ -64,6 +65,10 @@ const PROMO_CODES: Record<string, { minOrder: number; type: "flat" | "pct" | "fr
 // ── Context shape ──────────────────────────────────────────────────
 interface CartContextType {
   cart: CartItem[];
+  products: Product[];
+  cutTypes: CutType[];
+  updateProducts: (products: Product[]) => void;
+  updateCutTypes: (cutTypes: CutType[]) => void;
   addToCart: (
     product: Product,
     quantity: number,
@@ -95,10 +100,12 @@ const CartContext = createContext<CartContextType | undefined>(undefined);
 // ── Provider ───────────────────────────────────────────────────────
 export function CartProvider({ children }: { children: React.ReactNode }) {
   const [cart, setCart] = useState<CartItem[]>([]);
+  const [products, setProducts] = useState<Product[]>(PRODUCTS);
+  const [cutTypes, setCutTypes] = useState<CutType[]>(CUT_TYPES);
   const [promoCode, setPromoCode] = useState<string | null>(null);
   const [promoError, setPromoError] = useState<string>("");
 
-  // Load cart from localStorage on mount
+  // Load cart and admin configurations on mount
   useEffect(() => {
     try {
       const savedCart = localStorage.getItem("nonzo_cart");
@@ -122,12 +129,46 @@ export function CartProvider({ children }: { children: React.ReactNode }) {
       console.error("Failed to parse cart", e);
       localStorage.removeItem("nonzo_cart");
     }
+
+    // Load dynamic products
+    try {
+      const savedProducts = localStorage.getItem("nonzo_admin_products");
+      if (savedProducts) {
+        setProducts(JSON.parse(savedProducts));
+      } else {
+        localStorage.setItem("nonzo_admin_products", JSON.stringify(PRODUCTS));
+      }
+    } catch (e) {
+      console.error("Failed to load products", e);
+    }
+
+    // Load dynamic cut types
+    try {
+      const savedCuts = localStorage.getItem("nonzo_cut_types");
+      if (savedCuts) {
+        setCutTypes(JSON.parse(savedCuts));
+      } else {
+        localStorage.setItem("nonzo_cut_types", JSON.stringify(CUT_TYPES));
+      }
+    } catch (e) {
+      console.error("Failed to load cut types", e);
+    }
   }, []);
 
   // Persist cart whenever it changes
   const saveCart = (newCart: CartItem[]) => {
     setCart(newCart);
     localStorage.setItem("nonzo_cart", JSON.stringify(newCart));
+  };
+
+  const updateProducts = (newProducts: Product[]) => {
+    setProducts(newProducts);
+    localStorage.setItem("nonzo_admin_products", JSON.stringify(newProducts));
+  };
+
+  const updateCutTypes = (newCuts: CutType[]) => {
+    setCutTypes(newCuts);
+    localStorage.setItem("nonzo_cut_types", JSON.stringify(newCuts));
   };
 
   // ── Add to cart ──────────────────────────────────────────────────
@@ -152,7 +193,7 @@ export function CartProvider({ children }: { children: React.ReactNode }) {
       newCart.push({
         id: cartItemId,
         name: product.name,
-        image: product.image,
+        image: product.mainImage || product.image,
         weight,
         cutName: cutType.name,
         price,
@@ -228,14 +269,13 @@ export function CartProvider({ children }: { children: React.ReactNode }) {
       name: "Special Cut",
       description: "Custom specialty cut requested by customer.",
       extraCharge: 30,
-      iconSvg: `<svg viewBox="0 0 64 64" class="w-12 h-12 stroke-current fill-none" xmlns="http://www.w3.org/2000/svg">
-        <path d="M12 12L52 52M52 12L12 52" stroke-width="2" stroke-linecap="round"/>
-      </svg>`
+      image: "/images/cuts/clean-blue-crab.png",
+      status: "active" as const
     };
 
     const cutTypeObj = newCutId === "special-cut"
       ? SPECIAL_CUT_OBJ
-      : CUT_TYPES.find((c) => c.id === newCutId) || currentCutType;
+      : cutTypes.find((c) => c.id === newCutId) || currentCutType;
 
     const weightPrice = getWeightPrice(product, item.weight);
     const weightOriginalPrice = getWeightOriginalPrice(product, item.weight);
@@ -326,6 +366,10 @@ export function CartProvider({ children }: { children: React.ReactNode }) {
     <CartContext.Provider
       value={{
         cart,
+        products,
+        cutTypes,
+        updateProducts,
+        updateCutTypes,
         addToCart,
         removeFromCart,
         updateQuantity,

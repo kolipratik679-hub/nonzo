@@ -1,6 +1,7 @@
 "use client";
 
 import React, { useState, useEffect, useRef } from "react";
+import Image from "next/image";
 import { useRouter } from "next/navigation";
 import {
   ArrowLeft,
@@ -17,8 +18,14 @@ import {
   Link2,
   CheckCircle,
   HelpCircle,
+  Scissors,
+  ArrowLeftRight,
+  Edit2,
+  Save,
+  X,
 } from "lucide-react";
-import { PRODUCTS, CATEGORIES } from "@/lib/mock-data";
+import { CATEGORIES } from "@/lib/mock-data";
+import { useCart } from "@/context/cart-context";
 
 interface SlotSetting {
   id: string;
@@ -38,12 +45,27 @@ interface Banner {
   order: number;
 }
 
+const AVAILABLE_CUT_IMAGES = [
+  { label: "Whole Fish Image", value: "/images/cuts/whole-cut-fish.png" },
+  { label: "Curry Cut Image", value: "/images/cuts/curry-cut-fish.png" },
+  { label: "Steak Cut Image", value: "/images/cuts/steak-cut-fish.png" },
+  { label: "Fillet Image", value: "/images/cuts/fillet-cut-fish.png" },
+  { label: "Boneless Cubes/Prawns Image", value: "/images/cuts/cube-cut-prawns.png" },
+  { label: "Clean Blue Crab Image", value: "/images/cuts/clean-blue-crab.png" },
+  { label: "Clean Cut Lobster Image", value: "/images/cuts/clean-cut-lobster.png" },
+  { label: "Completely Peeled Prawns Image", value: "/images/cuts/completerly-peeled-prawns.png" },
+  { label: "Tail-On Round Prawns Image", value: "/images/cuts/tail-on-round-prawns.png" },
+  { label: "Whole Lobster Image", value: "/images/cuts/whole-lobster.png" },
+  { label: "Whole Prawns Image", value: "/images/cuts/whole-prawns.png" }
+];
+
 export default function AdminDashboard() {
   const router = useRouter();
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const { products, cutTypes, updateProducts, updateCutTypes } = useCart();
   
-  // Tabs: 'delivery' | 'banners' | 'assets'
-  const [activeTab, setActiveTab] = useState<"delivery" | "banners">("delivery");
+  // Tabs: 'delivery' | 'banners' | 'cuts' | 'products'
+  const [activeTab, setActiveTab] = useState<"delivery" | "banners" | "cuts" | "products">("delivery");
   const [notification, setNotification] = useState<string | null>(null);
 
   // 1. Delivery slot states
@@ -56,8 +78,34 @@ export default function AdminDashboard() {
   const [newBannerSubtitle, setNewBannerSubtitle] = useState("");
   const [newBannerImage, setNewBannerImage] = useState<string | null>(null);
   const [newBannerDestType, setNewBannerDestType] = useState<"product" | "category" | "custom">("product");
-  const [newBannerDestVal, setNewBannerDestVal] = useState(PRODUCTS[0]?.id || "");
+  const [newBannerDestVal, setNewBannerDestVal] = useState(products[0]?.id || "");
   const [dragActive, setDragActive] = useState(false);
+
+  // 3. Cut Type states
+  const [newCutId, setNewCutId] = useState("");
+  const [newCutName, setNewCutName] = useState("");
+  const [newCutDesc, setNewCutDesc] = useState("");
+  const [newCutCharge, setNewCutCharge] = useState<number>(0);
+  const [newCutImage, setNewCutImage] = useState(AVAILABLE_CUT_IMAGES[0].value);
+  const [newCutStatus, setNewCutStatus] = useState<"active" | "disabled">("active");
+
+  const [editingCutId, setEditingCutId] = useState<string | null>(null);
+  const [editCutName, setEditCutName] = useState("");
+  const [editCutDesc, setEditCutDesc] = useState("");
+  const [editCutCharge, setEditCutCharge] = useState<number>(0);
+  const [editCutImage, setEditCutImage] = useState("");
+  const [editCutStatus, setEditCutStatus] = useState<"active" | "disabled">("active");
+
+  // 4. Product states
+  const [selectedProductId, setSelectedProductId] = useState<string>("");
+  const [newGalleryImgUrl, setNewGalleryImgUrl] = useState("");
+
+  // Set default product ID once products are loaded
+  useEffect(() => {
+    if (products && products.length > 0 && !selectedProductId) {
+      setSelectedProductId(products[0].id);
+    }
+  }, [products, selectedProductId]);
 
   // Load from localStorage on mount
   useEffect(() => {
@@ -243,15 +291,165 @@ export default function AdminDashboard() {
     updated[index] = updated[targetIndex];
     updated[targetIndex] = temp;
 
-    // Recalculate order values
     const sequenced = updated.map((b, idx) => ({ ...b, order: idx + 1 }));
     setBanners(sequenced);
     localStorage.setItem("nonzo_admin_banners", JSON.stringify(sequenced));
     triggerNotification("Carousel order modified.");
   };
 
+  // ── Manage Cut Types Handlers ──
+  const handleAddCutType = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!newCutId || !newCutName || !newCutDesc) {
+      triggerNotification("Please fill in all fields.");
+      return;
+    }
+
+    const exists = cutTypes.some((c) => c.id === newCutId);
+    if (exists) {
+      triggerNotification(`Cut ID "${newCutId}" already exists.`);
+      return;
+    }
+
+    const newCut = {
+      id: newCutId,
+      name: newCutName,
+      description: newCutDesc,
+      extraCharge: newCutCharge,
+      image: newCutImage,
+      status: newCutStatus,
+    };
+
+    updateCutTypes([...cutTypes, newCut]);
+    // reset form
+    setNewCutId("");
+    setNewCutName("");
+    setNewCutDesc("");
+    setNewCutCharge(0);
+    setNewCutImage(AVAILABLE_CUT_IMAGES[0].value);
+    triggerNotification(`Cut type "${newCutName}" added successfully!`);
+  };
+
+  const handleStartEditCut = (cut: any) => {
+    setEditingCutId(cut.id);
+    setEditCutName(cut.name);
+    setEditCutDesc(cut.description);
+    setEditCutCharge(cut.extraCharge);
+    setEditCutImage(cut.image);
+    setEditCutStatus(cut.status);
+  };
+
+  const handleSaveCutEdit = (id: string) => {
+    if (!editCutName || !editCutDesc) {
+      triggerNotification("Please enter cut name and description.");
+      return;
+    }
+
+    const updated = cutTypes.map((c) =>
+      c.id === id
+        ? {
+            ...c,
+            name: editCutName,
+            description: editCutDesc,
+            extraCharge: editCutCharge,
+            image: editCutImage,
+            status: editCutStatus,
+          }
+        : c
+    );
+
+    updateCutTypes(updated);
+    setEditingCutId(null);
+    triggerNotification("Cut type details updated.");
+  };
+
+  const handleDeleteCutType = (id: string) => {
+    if (id === "whole") {
+      triggerNotification("Cannot delete Whole Fish cut type.");
+      return;
+    }
+    const updated = cutTypes.filter((c) => c.id !== id);
+    updateCutTypes(updated);
+    triggerNotification("Cut type removed.");
+  };
+
+  const handleToggleCutStatus = (id: string) => {
+    const updated = cutTypes.map((c) =>
+      c.id === id ? { ...c, status: c.status === "active" ? "disabled" as const : "active" as const } : c
+    );
+    updateCutTypes(updated);
+    triggerNotification("Cut status toggled.");
+  };
+
+  // ── Manage Product Gallery Handlers ──
+  const activeProduct = products.find((p) => p.id === selectedProductId);
+
+  const handleUpdateProductMainImage = (val: string) => {
+    if (!activeProduct) return;
+    const updated = products.map((p) =>
+      p.id === activeProduct.id
+        ? { ...p, mainImage: val, image: val } // update both fields for compatibility
+        : p
+    );
+    updateProducts(updated);
+    triggerNotification("Product main image updated!");
+  };
+
+  const handleAddGalleryImage = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!activeProduct || !newGalleryImgUrl.trim()) return;
+
+    const currentGallery = activeProduct.galleryImages || activeProduct.images || [];
+    const updatedGallery = [...currentGallery, newGalleryImgUrl.trim()];
+
+    const updated = products.map((p) =>
+      p.id === activeProduct.id
+        ? { ...p, galleryImages: updatedGallery, images: updatedGallery }
+        : p
+    );
+    updateProducts(updated);
+    setNewGalleryImgUrl("");
+    triggerNotification("Gallery image added!");
+  };
+
+  const handleDeleteGalleryImage = (imgUrl: string) => {
+    if (!activeProduct) return;
+
+    const currentGallery = activeProduct.galleryImages || activeProduct.images || [];
+    const updatedGallery = currentGallery.filter((url) => url !== imgUrl);
+
+    const updated = products.map((p) =>
+      p.id === activeProduct.id
+        ? { ...p, galleryImages: updatedGallery, images: updatedGallery }
+        : p
+    );
+    updateProducts(updated);
+    triggerNotification("Gallery image deleted.");
+  };
+
+  const handleMoveGalleryImage = (idx: number, direction: "left" | "right") => {
+    if (!activeProduct) return;
+
+    const currentGallery = [...(activeProduct.galleryImages || activeProduct.images || [])];
+    if (direction === "left" && idx === 0) return;
+    if (direction === "right" && idx === currentGallery.length - 1) return;
+
+    const targetIdx = direction === "left" ? idx - 1 : idx + 1;
+    const temp = currentGallery[idx];
+    currentGallery[idx] = currentGallery[targetIdx];
+    currentGallery[targetIdx] = temp;
+
+    const updated = products.map((p) =>
+      p.id === activeProduct.id
+        ? { ...p, galleryImages: currentGallery, images: currentGallery }
+        : p
+    );
+    updateProducts(updated);
+    triggerNotification("Gallery image reordered.");
+  };
+
   return (
-    <div className="space-y-6 pt-4 pb-16">
+    <div className="space-y-6 pt-3 pb-16">
       {/* Navigation Header */}
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-3">
@@ -266,7 +464,7 @@ export default function AdminDashboard() {
               Control Panel
             </h1>
             <p className="text-xs text-zinc-500 mt-0.5">
-              Manage delivery slots, timings, and hero banner carousels.
+              Manage logistics, homepage banners, custom cut types, and gallery images.
             </p>
           </div>
         </div>
@@ -289,10 +487,10 @@ export default function AdminDashboard() {
       )}
 
       {/* Tabs Menu */}
-      <div className="flex gap-2 border-b border-border-gray/50 pb-px">
+      <div className="flex gap-2 border-b border-border-gray/50 pb-px overflow-x-auto no-scrollbar">
         <button
           onClick={() => setActiveTab("delivery")}
-          className={`flex items-center gap-1.5 px-4 py-2.5 text-xs font-bold transition-all border-b-2 uppercase tracking-wide ${
+          className={`flex items-center gap-1.5 px-4 py-2.5 text-xs font-bold transition-all border-b-2 uppercase tracking-wide shrink-0 ${
             activeTab === "delivery"
               ? "border-brand-red text-brand-red font-black"
               : "border-transparent text-zinc-400 hover:text-zinc-600"
@@ -303,7 +501,7 @@ export default function AdminDashboard() {
         </button>
         <button
           onClick={() => setActiveTab("banners")}
-          className={`flex items-center gap-1.5 px-4 py-2.5 text-xs font-bold transition-all border-b-2 uppercase tracking-wide ${
+          className={`flex items-center gap-1.5 px-4 py-2.5 text-xs font-bold transition-all border-b-2 uppercase tracking-wide shrink-0 ${
             activeTab === "banners"
               ? "border-brand-red text-brand-red font-black"
               : "border-transparent text-zinc-400 hover:text-zinc-600"
@@ -311,6 +509,28 @@ export default function AdminDashboard() {
         >
           <ImageIcon className="h-4 w-4" />
           Homepage Banners
+        </button>
+        <button
+          onClick={() => setActiveTab("cuts")}
+          className={`flex items-center gap-1.5 px-4 py-2.5 text-xs font-bold transition-all border-b-2 uppercase tracking-wide shrink-0 ${
+            activeTab === "cuts"
+              ? "border-brand-red text-brand-red font-black"
+              : "border-transparent text-zinc-400 hover:text-zinc-600"
+          }`}
+        >
+          <Scissors className="h-4 w-4" />
+          Manage Cut Types
+        </button>
+        <button
+          onClick={() => setActiveTab("products")}
+          className={`flex items-center gap-1.5 px-4 py-2.5 text-xs font-bold transition-all border-b-2 uppercase tracking-wide shrink-0 ${
+            activeTab === "products"
+              ? "border-brand-red text-brand-red font-black"
+              : "border-transparent text-zinc-400 hover:text-zinc-600"
+          }`}
+        >
+          <ImageIcon className="h-4 w-4" />
+          Product Gallery Admin
         </button>
       </div>
 
@@ -454,7 +674,7 @@ export default function AdminDashboard() {
                     onChange={(e) => {
                       const val = e.target.value as any;
                       setNewBannerDestType(val);
-                      if (val === "product") setNewBannerDestVal(PRODUCTS[0]?.id || "");
+                      if (val === "product") setNewBannerDestVal(products[0]?.id || "");
                       else if (val === "category") setNewBannerDestVal(CATEGORIES[0]?.name || "Fish");
                       else setNewBannerDestVal("");
                     }}
@@ -474,7 +694,7 @@ export default function AdminDashboard() {
                       onChange={(e) => setNewBannerDestVal(e.target.value)}
                       className="w-full rounded-xl border border-border-gray px-3 py-2.5 text-xs outline-none bg-white focus:border-brand-red"
                     >
-                      {PRODUCTS.map((p) => (
+                      {products.map((p) => (
                         <option key={p.id} value={p.id}>{p.name}</option>
                       ))}
                     </select>
@@ -645,6 +865,394 @@ export default function AdminDashboard() {
               </div>
             )}
           </div>
+        </div>
+      )}
+
+      {/* ── TAB 3: MANAGE CUT TYPES ── */}
+      {activeTab === "cuts" && (
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+          {/* Left Column: Form to Add Cut Type */}
+          <div className="md:col-span-1 rounded-2xl border border-border-gray bg-white p-5 space-y-4 shadow-sm h-fit">
+            <h3 className="text-xs font-black uppercase tracking-wider text-zinc-400 pb-2 border-b border-zinc-100">
+              Create New Cut Type
+            </h3>
+            
+            <form onSubmit={handleAddCutType} className="space-y-4">
+              <div className="space-y-1">
+                <label className="text-[10px] font-bold text-zinc-500 uppercase">Cut ID (unique)</label>
+                <input
+                  type="text"
+                  required
+                  placeholder="e.g. steak-cut"
+                  value={newCutId}
+                  onChange={(e) => setNewCutId(e.target.value.toLowerCase().replace(/\s+/g, "-"))}
+                  className="w-full rounded-xl border border-border-gray px-3.5 py-2.5 text-xs outline-none focus:border-brand-red"
+                />
+              </div>
+
+              <div className="space-y-1">
+                <label className="text-[10px] font-bold text-zinc-500 uppercase">Cut Name</label>
+                <input
+                  type="text"
+                  required
+                  placeholder="e.g. Steak Cut"
+                  value={newCutName}
+                  onChange={(e) => setNewCutName(e.target.value)}
+                  className="w-full rounded-xl border border-border-gray px-3.5 py-2.5 text-xs outline-none focus:border-brand-red"
+                />
+              </div>
+
+              <div className="space-y-1">
+                <label className="text-[10px] font-bold text-zinc-500 uppercase">Description</label>
+                <textarea
+                  rows={2}
+                  required
+                  placeholder="e.g. Thick slices of the fish center..."
+                  value={newCutDesc}
+                  onChange={(e) => setNewCutDesc(e.target.value)}
+                  className="w-full rounded-xl border border-border-gray px-3.5 py-2.5 text-xs outline-none focus:border-brand-red"
+                />
+              </div>
+
+              <div className="space-y-1">
+                <label className="text-[10px] font-bold text-zinc-500 uppercase">Extra Charge (₹)</label>
+                <input
+                  type="number"
+                  required
+                  min={0}
+                  value={newCutCharge}
+                  onChange={(e) => setNewCutCharge(parseInt(e.target.value) || 0)}
+                  className="w-full rounded-xl border border-border-gray px-3.5 py-2.5 text-xs outline-none focus:border-brand-red"
+                />
+              </div>
+
+              <div className="space-y-1">
+                <label className="text-[10px] font-bold text-zinc-500 uppercase">Cut Image (Real Image)</label>
+                <select
+                  value={newCutImage}
+                  onChange={(e) => setNewCutImage(e.target.value)}
+                  className="w-full rounded-xl border border-border-gray px-3 py-2.5 text-xs outline-none bg-white focus:border-brand-red"
+                >
+                  {AVAILABLE_CUT_IMAGES.map((img) => (
+                    <option key={img.value} value={img.value}>{img.label}</option>
+                  ))}
+                </select>
+              </div>
+
+              <div className="space-y-1">
+                <label className="text-[10px] font-bold text-zinc-500 uppercase">Initial Status</label>
+                <select
+                  value={newCutStatus}
+                  onChange={(e) => setNewCutStatus(e.target.value as any)}
+                  className="w-full rounded-xl border border-border-gray px-3 py-2.5 text-xs outline-none bg-white focus:border-brand-red"
+                >
+                  <option value="active">Active (Visible to customer)</option>
+                  <option value="disabled">Disabled (Hidden)</option>
+                </select>
+              </div>
+
+              <button
+                type="submit"
+                className="w-full rounded-xl bg-brand-red py-3 text-xs font-bold text-white transition-all hover:bg-red-700 active-scale shadow-sm mt-2 flex items-center justify-center gap-1"
+              >
+                <Plus className="h-4 w-4" />
+                Add Cut Type
+              </button>
+            </form>
+          </div>
+
+          {/* Right Columns: List of Cut Types */}
+          <div className="md:col-span-2 rounded-2xl border border-border-gray bg-white p-5 space-y-4 shadow-sm h-fit">
+            <h3 className="text-xs font-black uppercase tracking-wider text-zinc-400 pb-2 border-b border-zinc-100">
+              Cut Types Management Panel ({cutTypes.length})
+            </h3>
+            
+            <div className="space-y-3.5">
+              {cutTypes.map((cut) => {
+                const isEditing = editingCutId === cut.id;
+                return (
+                  <div
+                    key={cut.id}
+                    className={`flex flex-col border rounded-2xl p-4 bg-white transition-all ${
+                      cut.status === "active" ? "border-zinc-200" : "border-border-gray bg-zinc-50/50 opacity-70"
+                    }`}
+                  >
+                    {isEditing ? (
+                      <div className="space-y-3">
+                        <div className="grid grid-cols-2 gap-3">
+                          <div className="col-span-2">
+                            <label className="text-[9px] font-bold text-zinc-400 uppercase">Edit Name</label>
+                            <input
+                              type="text"
+                              value={editCutName}
+                              onChange={(e) => setEditCutName(e.target.value)}
+                              className="w-full rounded-lg border border-zinc-300 px-3 py-1.5 text-xs outline-none"
+                            />
+                          </div>
+                          <div className="col-span-2">
+                            <label className="text-[9px] font-bold text-zinc-400 uppercase">Edit Description</label>
+                            <textarea
+                              rows={2}
+                              value={editCutDesc}
+                              onChange={(e) => setEditCutDesc(e.target.value)}
+                              className="w-full rounded-lg border border-zinc-300 px-3 py-1.5 text-xs outline-none"
+                            />
+                          </div>
+                          <div>
+                            <label className="text-[9px] font-bold text-zinc-400 uppercase">Edit Extra Charge (₹)</label>
+                            <input
+                              type="number"
+                              min={0}
+                              value={editCutCharge}
+                              onChange={(e) => setEditCutCharge(parseInt(e.target.value) || 0)}
+                              className="w-full rounded-lg border border-zinc-300 px-3 py-1.5 text-xs outline-none"
+                            />
+                          </div>
+                          <div>
+                            <label className="text-[9px] font-bold text-zinc-400 uppercase">Edit Status</label>
+                            <select
+                              value={editCutStatus}
+                              onChange={(e) => setEditCutStatus(e.target.value as any)}
+                              className="w-full rounded-lg border border-zinc-300 px-3 py-1.5 text-xs outline-none bg-white"
+                            >
+                              <option value="active">Active</option>
+                              <option value="disabled">Disabled</option>
+                            </select>
+                          </div>
+                          <div className="col-span-2">
+                            <label className="text-[9px] font-bold text-zinc-400 uppercase">Edit Image</label>
+                            <select
+                              value={editCutImage}
+                              onChange={(e) => setEditCutImage(e.target.value)}
+                              className="w-full rounded-lg border border-zinc-300 px-3 py-1.5 text-xs outline-none bg-white"
+                            >
+                              {AVAILABLE_CUT_IMAGES.map((img) => (
+                                <option key={img.value} value={img.value}>{img.label}</option>
+                              ))}
+                            </select>
+                          </div>
+                        </div>
+                        <div className="flex gap-2 justify-end pt-2 border-t border-zinc-100">
+                          <button
+                            type="button"
+                            onClick={() => setEditingCutId(null)}
+                            className="rounded-lg border border-border-gray px-3.5 py-1.5 text-[10px] font-bold text-zinc-500 hover:bg-zinc-50 transition-colors"
+                          >
+                            Cancel
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => handleSaveCutEdit(cut.id)}
+                            className="rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white px-4 py-1.5 text-[10px] font-bold transition-colors flex items-center gap-1"
+                          >
+                            <Save className="h-3 w-3" />
+                            Save
+                          </button>
+                        </div>
+                      </div>
+                    ) : (
+                      <div className="flex items-start gap-4">
+                        {/* Cut Image */}
+                        <div className="relative h-16 w-16 shrink-0 rounded-xl overflow-hidden border border-border-gray bg-zinc-50">
+                          <Image
+                            src={cut.image}
+                            alt={cut.name}
+                            fill
+                            sizes="64px"
+                            className="object-cover"
+                          />
+                        </div>
+                        {/* Details */}
+                        <div className="flex-1 min-w-0">
+                          <div className="flex items-center gap-2">
+                            <h4 className="text-xs font-bold text-foreground">{cut.name}</h4>
+                            <span className="text-[9px] text-zinc-400 font-semibold uppercase tracking-wider">ID: {cut.id}</span>
+                          </div>
+                          <p className="text-[10px] text-zinc-500 mt-1 leading-normal">{cut.description}</p>
+                          <div className="mt-2.5 flex items-center gap-2">
+                            <span className="text-[10px] font-bold text-zinc-600 bg-zinc-100 rounded-full px-2.5 py-0.5">
+                              Extra Charge: +₹{cut.extraCharge}
+                            </span>
+                            <span className={`text-[10px] font-extrabold uppercase rounded-full px-2.5 py-0.5 ${
+                              cut.status === "active" ? "bg-emerald-50 text-emerald-700" : "bg-red-50 text-brand-red"
+                            }`}>
+                              {cut.status === "active" ? "Active" : "Disabled"}
+                            </span>
+                          </div>
+                        </div>
+                        {/* Action buttons */}
+                        <div className="flex flex-col sm:flex-row items-center gap-1.5 shrink-0">
+                          <button
+                            onClick={() => handleToggleCutStatus(cut.id)}
+                            className="p-1.5 rounded-lg border border-border-gray hover:border-zinc-300 text-zinc-500 hover:text-foreground active-scale"
+                            title={cut.status === "active" ? "Disable Cut Type" : "Enable Cut Type"}
+                          >
+                            {cut.status === "active" ? <ToggleRight className="h-4 w-4 text-emerald-600" /> : <ToggleLeft className="h-4 w-4" />}
+                          </button>
+                          <button
+                            onClick={() => handleStartEditCut(cut)}
+                            className="p-1.5 rounded-lg border border-border-gray hover:border-zinc-300 text-zinc-500 hover:text-foreground active-scale"
+                            title="Edit Details"
+                          >
+                            <Edit2 className="h-4 w-4" />
+                          </button>
+                          {cut.id !== "whole" && (
+                            <button
+                              onClick={() => handleDeleteCutType(cut.id)}
+                              className="p-1.5 rounded-lg border border-red-100 hover:border-transparent text-brand-red bg-red-50 hover:bg-brand-red hover:text-white transition-all active-scale"
+                              title="Delete Cut Type"
+                            >
+                              <Trash2 className="h-4 w-4" />
+                            </button>
+                          )}
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ── TAB 4: MANAGE PRODUCT IMAGES ── */}
+      {activeTab === "products" && (
+        <div className="space-y-5">
+          {/* Select Product */}
+          <div className="rounded-2xl border border-border-gray bg-white p-5 space-y-4 shadow-sm">
+            <h3 className="text-xs font-black uppercase tracking-wider text-zinc-400">
+              Select Product to Configure
+            </h3>
+            <select
+              value={selectedProductId}
+              onChange={(e) => setSelectedProductId(e.target.value)}
+              className="w-full max-w-md rounded-xl border border-border-gray px-3.5 py-2.5 text-xs outline-none bg-white focus:border-brand-red"
+            >
+              {products.map((p) => (
+                <option key={p.id} value={p.id}>{p.name}</option>
+              ))}
+            </select>
+          </div>
+
+          {activeProduct && (
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+              
+              {/* Product Info & Main Image Management */}
+              <div className="md:col-span-1 space-y-5">
+                <div className="rounded-2xl border border-border-gray bg-white p-5 space-y-4 shadow-sm">
+                  <h3 className="text-xs font-black uppercase tracking-wider text-zinc-400 pb-2 border-b border-zinc-100">
+                    Product Main Image
+                  </h3>
+
+                  <div className="relative aspect-square w-full rounded-xl overflow-hidden border border-border-gray bg-zinc-50">
+                    <Image
+                      src={activeProduct.mainImage || activeProduct.image}
+                      alt={activeProduct.name}
+                      fill
+                      sizes="(min-width: 768px) 30vw, 90vw"
+                      className="object-cover"
+                    />
+                  </div>
+
+                  <div className="space-y-1">
+                    <label className="text-[10px] font-bold text-zinc-500 uppercase">Change Main Image Path</label>
+                    <input
+                      type="text"
+                      className="w-full rounded-xl border border-border-gray px-3 py-2 text-xs outline-none focus:border-brand-red"
+                      placeholder="e.g. /images/silver pompret.jpeg"
+                      value={activeProduct.mainImage || activeProduct.image}
+                      onChange={(e) => handleUpdateProductMainImage(e.target.value)}
+                    />
+                  </div>
+                </div>
+              </div>
+
+              {/* Gallery Images Management */}
+              <div className="md:col-span-2 rounded-2xl border border-border-gray bg-white p-5 space-y-4 shadow-sm">
+                <h3 className="text-xs font-black uppercase tracking-wider text-zinc-400 pb-2 border-b border-zinc-100">
+                  Unlimited Gallery Images
+                </h3>
+
+                {/* Add new gallery image URL */}
+                <form onSubmit={handleAddGalleryImage} className="flex gap-2">
+                  <input
+                    type="text"
+                    required
+                    placeholder="Enter gallery image path (e.g. /images/large prawns.jpg)"
+                    value={newGalleryImgUrl}
+                    onChange={(e) => setNewGalleryImgUrl(e.target.value)}
+                    className="flex-grow rounded-xl border border-border-gray px-3.5 py-2.5 text-xs outline-none focus:border-brand-red"
+                  />
+                  <button
+                    type="submit"
+                    className="rounded-xl bg-brand-red px-5 py-2.5 text-xs font-bold text-white transition-all hover:bg-red-700 active-scale shrink-0"
+                  >
+                    Add Image
+                  </button>
+                </form>
+
+                {/* Grid list of gallery images */}
+                {(!activeProduct.galleryImages || activeProduct.galleryImages.length === 0) ? (
+                  <div className="text-center py-12 text-zinc-400 text-xs">
+                    No gallery images configured for this product.
+                  </div>
+                ) : (
+                  <div className="grid grid-cols-2 sm:grid-cols-3 gap-4">
+                    {activeProduct.galleryImages.map((imgUrl, index) => (
+                      <div
+                        key={imgUrl}
+                        className="flex flex-col border border-border-gray rounded-xl overflow-hidden bg-white p-2.5 space-y-2 relative group"
+                      >
+                        <div className="relative aspect-square w-full rounded-lg overflow-hidden bg-zinc-50 border border-zinc-100">
+                          <Image
+                            src={imgUrl}
+                            alt={`gallery-${index}`}
+                            fill
+                            sizes="120px"
+                            className="object-cover"
+                          />
+                        </div>
+
+                        {/* Order & delete controls */}
+                        <div className="flex items-center justify-between gap-1 mt-1">
+                          <div className="flex gap-1.5">
+                            <button
+                              type="button"
+                              onClick={() => handleMoveGalleryImage(index, "left")}
+                              disabled={index === 0}
+                              className="p-1 rounded bg-zinc-50 border border-zinc-200 hover:bg-zinc-100 text-zinc-600 disabled:opacity-30 active-scale"
+                              title="Move Left"
+                            >
+                              <ArrowLeftRight className="h-3 w-3" />
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => handleMoveGalleryImage(index, "right")}
+                              disabled={index === activeProduct.galleryImages.length - 1}
+                              className="p-1 rounded bg-zinc-50 border border-zinc-200 hover:bg-zinc-100 text-zinc-600 disabled:opacity-30 active-scale"
+                              title="Move Right"
+                            >
+                              <ArrowLeftRight className="h-3 w-3 rotate-90" />
+                            </button>
+                          </div>
+
+                          <button
+                            type="button"
+                            onClick={() => handleDeleteGalleryImage(imgUrl)}
+                            className="p-1 rounded bg-red-50 border border-red-100 hover:bg-brand-red hover:text-white text-brand-red transition-all active-scale"
+                            title="Delete Image"
+                          >
+                            <Trash2 className="h-3 w-3" />
+                          </button>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+            </div>
+          )}
         </div>
       )}
     </div>

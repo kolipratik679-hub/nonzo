@@ -18,8 +18,9 @@ import {
   ChevronRight,
   type LucideIcon,
 } from "lucide-react";
-import { PRODUCTS, CATEGORIES, WHY_NONZO, Product } from "@/lib/mock-data";
+import { CATEGORIES, WHY_NONZO, Product } from "@/lib/mock-data";
 import { ProductCard } from "@/components/product-card";
+import { useCart } from "@/context/cart-context";
 
 const CATEGORY_ICONS: Record<string, LucideIcon> = {
   Fish,
@@ -39,6 +40,7 @@ const CATEGORY_GRADIENTS: Record<string, { from: string; to: string; iconBg: str
 
 export default function HomePage() {
   const router = useRouter();
+  const { products } = useCart();
   const [selectedCategory, setSelectedCategory] = useState<string | null>(null);
   
   // Carousel states
@@ -92,21 +94,23 @@ export default function HomePage() {
       ];
       setBanners(defaultBanners);
     }
+  }, []);
 
-    // Load recently viewed list
+  // Load recently viewed list after products are loaded/changed
+  useEffect(() => {
     const savedRecent = localStorage.getItem("nonzo_recently_viewed");
-    if (savedRecent) {
+    if (savedRecent && products && products.length > 0) {
       try {
         const ids: string[] = JSON.parse(savedRecent);
         const loaded = ids
-          .map((id) => PRODUCTS.find((p) => p.id === id))
+          .map((id) => products.find((p) => p.id === id))
           .filter((p): p is Product => !!p);
         setRecentlyViewed(loaded);
       } catch (e) {
         console.error("Failed to parse recently viewed", e);
       }
     }
-  }, []);
+  }, [products]);
 
   // Auto-cycle hero banner carousel
   useEffect(() => {
@@ -118,17 +122,17 @@ export default function HomePage() {
   }, [banners]);
 
   const filteredProducts = selectedCategory
-    ? PRODUCTS.filter(
+    ? products.filter(
         (p) => p.category.toLowerCase() === selectedCategory.toLowerCase()
       )
-    : PRODUCTS;
+    : products;
 
   // Filter sections
-  const freshProducts = PRODUCTS.filter((p) => p.stockStatus !== "Out Of Stock").slice(0, 4);
-  const bestSellers = PRODUCTS.filter((p) =>
+  const freshProducts = products.filter((p) => p.stockStatus !== "Out Of Stock").slice(0, 4);
+  const bestSellers = products.filter((p) =>
     ["tiger-prawns", "silver-pomfret", "rawas", "black-pomfret"].includes(p.id)
   );
-  const buyAgainProducts = PRODUCTS.filter((p) =>
+  const buyAgainProducts = products.filter((p) =>
     ["bombil", "black-pomfret"].includes(p.id)
   );
 
@@ -139,22 +143,8 @@ export default function HomePage() {
   };
 
   return (
-    <div className="space-y-8 pb-16">
-      
-      {/* 1. Sticky Search Section */}
-      <div className="sticky top-[56px] md:top-[64px] z-30 w-full bg-white/95 backdrop-blur-md py-3 border-b border-border-gray/50 -mx-3 px-3 md:-mx-4 md:px-4">
-        <div
-          onClick={() => router.push("/search")}
-          className="mx-auto max-w-7xl flex w-full cursor-pointer items-center gap-3 rounded-2xl border border-border-gray bg-light-gray px-4 py-3 shadow-sm transition-all hover:bg-zinc-100/80 active-scale"
-        >
-          <Search className="h-4 w-4 shrink-0 text-zinc-400" />
-          <span className="text-xs font-semibold text-zinc-400">
-            Search fresh fish, prawns, crabs, shellfish...
-          </span>
-        </div>
-      </div>
-
-      {/* 2. Hero Banner Carousel */}
+    <div className="space-y-8 pb-16 pt-3 md:pt-4">
+      {/* 1. Hero Banner Carousel */}
       {banners.length > 0 && (
         <div className="relative aspect-[16/9] md:aspect-[21/7] w-full overflow-hidden rounded-3xl border border-border-gray bg-light-gray shadow-sm group">
           {banners.map((banner, idx) => {
@@ -238,7 +228,7 @@ export default function HomePage() {
         </div>
       )}
 
-      {/* 3. Shop by Category — Premium image-based cards */}
+      {/* 2. Shop by Category — Premium image-based cards */}
       <div className="space-y-4">
         <div className="flex items-center justify-between">
           <h2 className="text-xs font-black uppercase tracking-wider text-zinc-400">
@@ -333,7 +323,7 @@ export default function HomePage() {
       {/* Main Homepage Sections */}
       {!selectedCategory && (
         <>
-          {/* 4. Fresh Today */}
+          {/* 3. Fresh Today */}
           <div className="space-y-4">
             <h2 className="flex items-center gap-1.5 text-xs font-black uppercase tracking-wider text-zinc-400">
               <Zap className="h-4 w-4 text-brand-red" />
@@ -346,7 +336,7 @@ export default function HomePage() {
             </div>
           </div>
 
-          {/* 5. Best Sellers */}
+          {/* 4. Best Sellers */}
           <div className="space-y-4">
             <h2 className="flex items-center gap-1.5 text-xs font-black uppercase tracking-wider text-zinc-400">
               <Award className="h-4 w-4 text-brand-red" />
@@ -359,7 +349,7 @@ export default function HomePage() {
             </div>
           </div>
 
-          {/* 6. Recently Viewed — only if user viewed products */}
+          {/* 5. Recently Viewed — only if user viewed products */}
           {recentlyViewed.length > 0 && (
             <div className="space-y-4">
               <h2 className="flex items-center gap-1.5 text-xs font-black uppercase tracking-wider text-zinc-400">
@@ -376,7 +366,7 @@ export default function HomePage() {
             </div>
           )}
 
-          {/* 7. Buy Again — only for returning users (has recently viewed items) */}
+          {/* 6. Buy Again — only for returning users (has recently viewed items) */}
           {recentlyViewed.length > 0 && (
             <div className="space-y-4">
               <h2 className="flex items-center gap-1.5 text-xs font-black uppercase tracking-wider text-zinc-400">
@@ -396,7 +386,7 @@ export default function HomePage() {
                       <div className="flex items-center gap-3">
                         <div className="relative h-12 w-12 shrink-0 overflow-hidden rounded-xl bg-light-gray">
                           <Image
-                            src={product.image}
+                            src={product.mainImage || product.image}
                             alt={product.name}
                             fill
                             sizes="48px"
@@ -432,7 +422,7 @@ export default function HomePage() {
             </div>
           )}
 
-          {/* 8. Why NONZO */}
+          {/* 7. Why NONZO */}
           <div className="space-y-4 pt-2">
             <h2 className="flex items-center gap-1.5 text-xs font-black uppercase tracking-wider text-zinc-400">
               <ShieldCheck className="h-4 w-4 text-brand-red" />

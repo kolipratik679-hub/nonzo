@@ -20,7 +20,6 @@ import {
   ChevronDown,
   PackageOpen,
 } from "lucide-react";
-import { CUT_TYPES } from "@/lib/mock-data";
 
 export default function CartPage() {
   const {
@@ -39,6 +38,7 @@ export default function CartPage() {
     promoError,
     updateCartItemWeight,
     updateCartItemCut,
+    cutTypes,
   } = useCart();
   const router = useRouter();
   const [promoInput, setPromoInput] = useState<string>("");
@@ -93,13 +93,13 @@ export default function CartPage() {
   }
 
   return (
-    <div className="space-y-5 pt-4 pb-32 md:pb-12">
+    <div className="space-y-5 pt-3 pb-32 md:pb-12">
       {/* Header row */}
       <div className="flex items-center justify-between">
         <div>
           <h1 className="text-base font-black text-foreground">Your Cart</h1>
           <p className="text-[11px] text-zinc-400 mt-0.5">
-            {totalItems} {totalItems === 1 ? "item" : "items"} \u00b7{" "}
+            {totalItems} {totalItems === 1 ? "item" : "items"} &bull;{" "}
             {cart.length} {cart.length === 1 ? "product" : "products"}
           </p>
         </div>
@@ -115,8 +115,10 @@ export default function CartPage() {
       <div className="space-y-3">
         {cart.map((item) => {
           const allowedCuts = item._product?.allowedCuts || [];
-          const allowedCutObjects = CUT_TYPES.filter((c) => allowedCuts.includes(c.id));
           const currentCutId = item._cutType?.id || "whole";
+          const allowedCutObjects = cutTypes.filter(
+            (c) => allowedCuts.includes(c.id) && (c.status === "active" || c.id === currentCutId)
+          );
 
           return (
             <div
@@ -163,7 +165,7 @@ export default function CartPage() {
                     <span className="text-[9px] font-bold text-zinc-500 bg-zinc-100 rounded-full px-2 py-0.5">
                       {item._cutType?.name || "Whole Fish"}
                       {(item._cutType?.extraCharge ?? 0) > 0 && (
-                        <span className="ml-1 text-amber-600">+\u20b9{item._cutType?.extraCharge}</span>
+                        <span className="ml-1 text-amber-600">+₹{item._cutType?.extraCharge}</span>
                       )}
                     </span>
                   </div>
@@ -172,12 +174,12 @@ export default function CartPage() {
                     {/* Price */}
                     <div>
                       <span className="text-xs font-black text-foreground">
-                        \u20b9{item.price * item.quantity}
+                        ₹{item.price * item.quantity}
                       </span>
                       {item.originalPrice > item.price && (
                         <>
                           <span className="ml-1.5 text-[9px] text-zinc-400 line-through">
-                            \u20b9{item.originalPrice * item.quantity}
+                            ₹{item.originalPrice * item.quantity}
                           </span>
                           <span className="ml-1.5 text-[9px] font-extrabold text-brand-red">
                             ({Math.round(((item.originalPrice - item.price) / item.originalPrice) * 100)}% OFF)
@@ -232,23 +234,28 @@ export default function CartPage() {
                               ? "border-brand-red bg-brand-red/5 text-brand-red"
                               : "border-border-gray bg-white text-zinc-500 hover:border-zinc-300"
                           }`}
-                          style={{ minWidth: "70px" }}
+                          style={{ minWidth: "75px" }}
                         >
-                          <div
-                            className={`flex h-10 w-10 items-center justify-center rounded-lg ${
-                              isActive ? "text-brand-red" : "text-zinc-400"
-                            }`}
-                            dangerouslySetInnerHTML={{ __html: cut.iconSvg.replace('class="w-12 h-12', 'class="w-8 h-8') }}
-                          />
+                          <div className={`relative h-10 w-10 overflow-hidden rounded-lg border bg-white p-0.5 ${
+                            isActive ? "border-brand-red" : "border-border-gray"
+                          }`}>
+                            <Image
+                              src={cut.image}
+                              alt={cut.name}
+                              fill
+                              sizes="40px"
+                              className="object-cover"
+                            />
+                          </div>
                           <span className={`text-[8px] font-bold leading-tight text-center ${isActive ? "text-brand-red" : "text-zinc-600"}`}>
                             {cut.name}
                           </span>
                           <span className={`text-[8px] font-extrabold rounded-full px-1.5 py-0.5 ${
                             cut.extraCharge > 0
                               ? "bg-amber-50 text-amber-700"
-                              : "bg-zinc-100 text-zinc-500"
+                              : "bg-zinc-100 text-zinc-50"
                           }`}>
-                            {cut.extraCharge === 0 ? "Free" : `+\u20b9${cut.extraCharge}`}
+                            {cut.extraCharge === 0 ? "Free" : `+₹${cut.extraCharge}`}
                           </span>
                         </button>
                       );
@@ -272,7 +279,7 @@ export default function CartPage() {
                   Coupon Applied!
                 </span>
                 <p className="text-[10px] text-emerald-600 font-semibold">
-                  You Saved \u20b9{promoDiscount}
+                  You Saved ₹{promoDiscount}
                 </p>
               </div>
             </div>
@@ -352,9 +359,9 @@ export default function CartPage() {
         </h3>
 
         {[
-          { label: "Subtotal", value: `\u20b9${subtotal}` },
-          { label: "Cleaning & Handling", value: cleaningFee > 0 ? `\u20b9${cleaningFee}` : "FREE" },
-          { label: "Delivery Fee", value: deliveryFee > 0 ? `\u20b9${deliveryFee}` : "FREE" },
+          { label: "Subtotal", value: `₹${subtotal}` },
+          { label: "Cleaning & Handling", value: cleaningFee > 0 ? `₹${cleaningFee}` : "FREE" },
+          { label: "Delivery Fee", value: deliveryFee > 0 ? `₹${deliveryFee}` : "FREE" },
         ].map((row) => (
           <div key={row.label} className="flex justify-between">
             <span className="text-xs text-zinc-500">{row.label}</span>
@@ -372,7 +379,7 @@ export default function CartPage() {
           <div className="flex justify-between">
             <span className="text-xs text-emerald-600">Promo Discount</span>
             <span className="text-xs font-bold text-emerald-600">
-              \u2212\u20b9{promoDiscount}
+              &minus;₹{promoDiscount}
             </span>
           </div>
         )}
@@ -380,13 +387,13 @@ export default function CartPage() {
         {savings > 0 && (
           <div className="flex justify-between border-t border-border-gray/50 pt-2">
             <span className="text-xs text-emerald-600">You&apos;re saving</span>
-            <span className="text-xs font-bold text-emerald-600">\u20b9{savings}</span>
+            <span className="text-xs font-bold text-emerald-600">₹{savings}</span>
           </div>
         )}
 
         <div className="border-t border-border-gray pt-2.5 flex justify-between">
           <span className="text-sm font-black text-foreground">Total</span>
-          <span className="text-sm font-black text-foreground">\u20b9{finalTotal}</span>
+          <span className="text-sm font-black text-foreground">₹{finalTotal}</span>
         </div>
       </div>
 
@@ -425,7 +432,7 @@ export default function CartPage() {
             </p>
           </div>
           <div className="flex items-center gap-2">
-            <span className="text-sm font-black text-white">\u20b9{finalTotal}</span>
+            <span className="text-sm font-black text-white">₹{finalTotal}</span>
             <div className="flex h-7 w-7 items-center justify-center rounded-full bg-white/20">
               <ArrowRight className="h-4 w-4 text-white" />
             </div>

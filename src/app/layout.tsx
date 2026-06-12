@@ -85,7 +85,7 @@ export default function RootLayout({
             <AppHeader />
 
             {/* Main page content */}
-            <main className="flex-1 w-full max-w-7xl mx-auto px-3 pb-24 sm:px-4 md:pb-6">
+            <main className="flex-1 w-full max-w-7xl mx-auto px-3 pb-24 sm:px-4 md:pb-6 pt-[116px] md:pt-[80px]">
               {children}
             </main>
 

@@ -1,6 +1,6 @@
 "use client";
 
-import React from "react";
+import React, { useState, useEffect } from "react";
 import Image from "next/image";
 import { useRouter } from "next/navigation";
 import { Product, CUT_TYPES } from "@/lib/mock-data";
@@ -13,17 +13,45 @@ interface ProductCardProps {
 
 export function ProductCard({ product }: ProductCardProps) {
   const router = useRouter();
-  const { cart, addToCart, updateQuantity } = useCart();
+  const { cart, addToCart, updateQuantity, cutTypes } = useCart();
+
+  const [hoverImageIdx, setHoverImageIdx] = useState<number | null>(null);
+  const [isHovered, setIsHovered] = useState(false);
 
   const defaultOption = product.weightOptions[0];
   const isOutOfStock = product.stockStatus === "Out Of Stock";
   const isLowStock = product.stockStatus === "Low Stock";
 
-  // Check if this product (default config) is already in cart
-  const defaultCut = CUT_TYPES.find((c) => product.allowedCuts.includes(c.id)) || CUT_TYPES[0];
+  // Dynamic cut selection
+  const activeCuts = cutTypes && cutTypes.length > 0 ? cutTypes : CUT_TYPES;
+  const defaultCut = activeCuts.find((c) => product.allowedCuts.includes(c.id) && c.status === "active") || activeCuts[0];
+  
   const cartItemId = `${product.id}-${defaultOption.weight}-${defaultCut.id}`;
   const cartItem = cart.find((item) => item.id === cartItemId);
   const cartQty = cartItem?.quantity ?? 0;
+
+  const gallery = product.galleryImages || product.images || [product.mainImage || product.image];
+
+  // Rotate images on hover (desktop only)
+  useEffect(() => {
+    if (!isHovered) {
+      setHoverImageIdx(null);
+      return;
+    }
+
+    const isDesktop = window.matchMedia("(min-width: 768px)").matches;
+    if (!isDesktop || gallery.length <= 1) return;
+
+    setHoverImageIdx(0);
+    const interval = setInterval(() => {
+      setHoverImageIdx((prev) => {
+        if (prev === null) return 0;
+        return (prev + 1) % gallery.length;
+      });
+    }, 1500);
+
+    return () => clearInterval(interval);
+  }, [isHovered, gallery]);
 
   const handleAdd = (e: React.MouseEvent | React.TouchEvent) => {
     e.preventDefault();
@@ -54,19 +82,30 @@ export function ProductCard({ product }: ProductCardProps) {
   return (
     <div
       onClick={handleCardClick}
+      onMouseEnter={() => setIsHovered(true)}
+      onMouseLeave={() => setIsHovered(false)}
       className={`group flex cursor-pointer flex-col overflow-hidden rounded-2xl border border-border-gray bg-white transition-all duration-200 hover:border-zinc-300 hover:shadow-md ${
         isOutOfStock ? "opacity-70" : ""
       }`}
     >
-      {/* Product Image */}
+      {/* Product Image Layer Container */}
       <div className="relative aspect-square w-full overflow-hidden bg-light-gray">
-        <Image
-          src={product.image || "/NONZO-LOGO.png"}
-          alt={product.name || "Product image"}
-          fill
-          sizes="(max-width: 768px) 50vw, 25vw"
-          className="object-cover transition-transform duration-500 group-hover:scale-105"
-        />
+        {gallery.map((imgUrl, idx) => {
+          const isVisible = hoverImageIdx === null ? idx === 0 : idx === hoverImageIdx;
+          return (
+            <Image
+              key={imgUrl}
+              src={imgUrl || "/NONZO-LOGO.png"}
+              alt={product.name || "Product image"}
+              fill
+              sizes="(max-width: 768px) 50vw, 25vw"
+              className={`object-cover transition-opacity duration-500 ease-in-out absolute inset-0 ${
+                isVisible ? "opacity-100" : "opacity-0 pointer-events-none"
+              }`}
+              priority={idx === 0}
+            />
+          );
+        })}
 
         {/* Discount Badge */}
         {discountPct > 0 && !isOutOfStock && (

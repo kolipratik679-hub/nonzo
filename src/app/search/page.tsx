@@ -15,8 +15,9 @@ import {
   TrendingUp,
   type LucideIcon,
 } from "lucide-react";
-import { PRODUCTS, CATEGORIES } from "@/lib/mock-data";
+import { CATEGORIES } from "@/lib/mock-data";
 import { ProductCard } from "@/components/product-card";
+import { useCart } from "@/context/cart-context";
 
 const CATEGORY_ICONS: Record<string, LucideIcon> = {
   Fish,
@@ -37,19 +38,45 @@ const POPULAR_SEARCHES = [
 
 export default function SearchPage() {
   const router = useRouter();
+  const { products } = useCart();
   const searchInputRef = useRef<HTMLInputElement>(null);
   const [query, setQuery] = useState<string>("");
   const [selectedCategory, setSelectedCategory] = useState<string | null>(null);
   const [showSuggestions, setShowSuggestions] = useState<boolean>(false);
 
+  // Sync from URL query parameters on mount
   useEffect(() => {
+    if (typeof window !== "undefined") {
+      const q = new URLSearchParams(window.location.search).get("q") || "";
+      if (q) {
+        setQuery(q);
+        window.dispatchEvent(new CustomEvent("syncSearchVal", { detail: q }));
+      }
+    }
     if (searchInputRef.current) {
       searchInputRef.current.focus();
     }
   }, []);
 
+  // Listen to header search query changes
+  useEffect(() => {
+    const handleHeaderQuery = (e: Event) => {
+      const customEvent = e as CustomEvent;
+      setQuery(customEvent.detail || "");
+    };
+    window.addEventListener("searchQueryChange", handleHeaderQuery);
+    return () => window.removeEventListener("searchQueryChange", handleHeaderQuery);
+  }, []);
+
+  const handleQueryUpdate = (val: string) => {
+    setQuery(val);
+    window.dispatchEvent(new CustomEvent("syncSearchVal", { detail: val }));
+    const newUrl = val ? `/search?q=${encodeURIComponent(val)}` : `/search`;
+    window.history.replaceState(null, "", newUrl);
+  };
+
   const handleClearSearch = () => {
-    setQuery("");
+    handleQueryUpdate("");
     setShowSuggestions(false);
     if (searchInputRef.current) searchInputRef.current.focus();
   };
@@ -61,8 +88,8 @@ export default function SearchPage() {
   };
 
   // Live suggestions — match product names to query
-  const suggestions = query.trim().length > 0
-    ? PRODUCTS.filter((p) =>
+  const suggestions = query.trim().length > 0 && products
+    ? products.filter((p) =>
         p.name.toLowerCase().includes(query.toLowerCase()) ||
         p.category.toLowerCase().includes(query.toLowerCase())
       )
@@ -70,7 +97,7 @@ export default function SearchPage() {
         .map((p) => ({ text: p.name, id: p.id }))
     : [];
 
-  const filteredProducts = PRODUCTS.filter((product) => {
+  const filteredProducts = (products || []).filter((product) => {
     const matchesQuery =
       query.trim() === "" ||
       product.name.toLowerCase().includes(query.toLowerCase()) ||
@@ -84,11 +111,11 @@ export default function SearchPage() {
     return matchesQuery && matchesCategory;
   });
 
-  const recommendations = PRODUCTS.slice(0, 4);
+  const recommendations = (products || []).slice(0, 4);
   const hasResults = filteredProducts.length > 0;
 
   return (
-    <div className="space-y-5 pt-4 pb-12">
+    <div className="space-y-5 pt-3 pb-12">
       {/* Search Header */}
       <div className="flex items-center gap-3">
         <button
@@ -106,7 +133,7 @@ export default function SearchPage() {
             placeholder="Search fresh fish, crabs, shellfish..."
             value={query}
             onChange={(e) => {
-              setQuery(e.target.value);
+              handleQueryUpdate(e.target.value);
               setShowSuggestions(true);
             }}
             onFocus={() => setShowSuggestions(true)}
@@ -129,7 +156,7 @@ export default function SearchPage() {
                 <button
                   key={s.id}
                   onMouseDown={() => {
-                    setQuery(s.text);
+                    handleQueryUpdate(s.text);
                     setShowSuggestions(false);
                   }}
                   className="flex w-full items-center gap-3 px-4 py-3 text-left text-xs font-semibold text-foreground hover:bg-light-gray transition-colors border-b border-border-gray/30 last:border-b-0"
@@ -157,7 +184,7 @@ export default function SearchPage() {
               <button
                 key={term}
                 onClick={() => {
-                  setQuery(term);
+                  handleQueryUpdate(term);
                   setShowSuggestions(false);
                 }}
                 className="flex items-center gap-1.5 rounded-full border border-border-gray bg-white px-3 py-1.5 text-xs font-semibold text-zinc-600 hover:border-zinc-300 hover:text-foreground transition-all active-scale"

@@ -4,8 +4,8 @@ import React, { useState, use, useEffect } from "react";
 import Link from "next/link";
 import Image from "next/image";
 import { useRouter } from "next/navigation";
-import { ArrowLeft, CheckCircle2, ShieldAlert, ShoppingBag, ArrowRight } from "lucide-react";
-import { PRODUCTS, CUT_TYPES, CutType } from "@/lib/mock-data";
+import { ArrowLeft, CheckCircle2, ShieldAlert, ShoppingBag } from "lucide-react";
+import { CutType } from "@/lib/mock-data";
 import { useCart } from "@/context/cart-context";
 
 interface PageProps {
@@ -15,9 +15,9 @@ interface PageProps {
 export default function ProductDetailPage({ params }: PageProps) {
   const router = useRouter();
   const { id } = use(params);
-  const { addToCart, cart, finalTotal } = useCart();
+  const { addToCart, cart, finalTotal, products, cutTypes } = useCart();
 
-  const product = PRODUCTS.find((p) => p.id === id);
+  const product = products.find((p) => p.id === id);
 
   // Set browser title dynamically & append to recently viewed list
   useEffect(() => {
@@ -45,11 +45,20 @@ export default function ProductDetailPage({ params }: PageProps) {
   const [selectedWeight, setSelectedWeight] = useState<string>("500g");
 
   // Get active cut types allowed for this specific fish
-  const allowedCuts = product ? CUT_TYPES.filter((cut) => product.allowedCuts.includes(cut.id)) : [];
-  const [selectedCut, setSelectedCut] = useState<CutType>(allowedCuts[0] || CUT_TYPES[0]);
+  const allowedCuts = product
+    ? cutTypes.filter((cut) => product.allowedCuts.includes(cut.id) && cut.status === "active")
+    : [];
+  const [selectedCut, setSelectedCut] = useState<CutType | null>(null);
   const [specialInstructions, setSpecialInstructions] = useState<string>("");
   const [activeImageIdx, setActiveImageIdx] = useState<number>(0);
   const [addedMessage, setAddedMessage] = useState<boolean>(false);
+
+  // Set default cut once allowedCuts load
+  useEffect(() => {
+    if (allowedCuts.length > 0 && !selectedCut) {
+      setSelectedCut(allowedCuts[0]);
+    }
+  }, [allowedCuts, selectedCut]);
 
   // Fallback if product not found
   if (!product) {
@@ -75,18 +84,16 @@ export default function ProductDetailPage({ params }: PageProps) {
 
   // Compute live price based on selected weight
   const getWeightPrice = (weight: string): number => {
-    // 1. Try to find the exact match in mock data
     const exactMatch = product.weightOptions.find((o) => o.weight === weight);
     if (exactMatch) return exactMatch.price;
 
-    // 2. Proportional scale based on the first available weight option
     const baseOpt = product.weightOptions[0];
+    if (!baseOpt) return 0;
     const baseWeightVal = parseWeightToGrams(baseOpt.weight);
     const targetWeightVal = parseWeightToGrams(weight);
 
     const ratio = targetWeightVal / baseWeightVal;
     
-    // Scale discount: heavier gets a slightly lower rate per gram
     let scaleModifier = 1.0;
     if (ratio > 1) scaleModifier = 0.92; // 8% bulk discount
     if (ratio < 1) scaleModifier = 1.05; // 5% small portion mark-up
@@ -98,7 +105,6 @@ export default function ProductDetailPage({ params }: PageProps) {
     const exactMatch = product.weightOptions.find((o) => o.weight === weight);
     if (exactMatch) return exactMatch.originalPrice;
 
-    // Estimate based on 20% mark-up
     return Math.round(getWeightPrice(weight) * 1.2);
   };
 
@@ -106,11 +112,13 @@ export default function ProductDetailPage({ params }: PageProps) {
   const currentWeightOriginalPrice = getWeightOriginalPrice(selectedWeight);
   
   // Total line price: weight price + extra charge for cut type
-  const unitPrice = currentWeightPrice + selectedCut.extraCharge;
-  const originalUnitPrice = currentWeightOriginalPrice + selectedCut.extraCharge;
+  const activeCutType = selectedCut || allowedCuts[0] || cutTypes[0];
+  const unitPrice = currentWeightPrice + (activeCutType?.extraCharge || 0);
+  const originalUnitPrice = currentWeightOriginalPrice + (activeCutType?.extraCharge || 0);
 
   const handleAddToCart = () => {
-    addToCart(product, 1, selectedWeight, selectedCut, specialInstructions);
+    if (!activeCutType) return;
+    addToCart(product, 1, selectedWeight, activeCutType, specialInstructions);
     setAddedMessage(true);
     setTimeout(() => {
       setAddedMessage(false);
@@ -123,8 +131,10 @@ export default function ProductDetailPage({ params }: PageProps) {
   const isCurrentProductInCart = cart.some((item) => item._product.id === product.id);
   const totalItems = cart.reduce((sum, item) => sum + item.quantity, 0);
 
+  const galleryList = product.galleryImages || product.images || [];
+
   return (
-    <div className="space-y-6 pt-4 pb-24">
+    <div className="space-y-6 pt-3 pb-24">
       {/* Back Button Navigation Header */}
       <div className="flex items-center justify-between">
         <button
@@ -148,9 +158,9 @@ export default function ProductDetailPage({ params }: PageProps) {
       <div className="grid grid-cols-1 gap-6 md:grid-cols-2">
         {/* Left Side: Images Gallery */}
         <div className="space-y-3">
-          <div className="relative aspect-square w-full overflow-hidden rounded-2xl border border-border-gray bg-light-gray shadow-sm">
+          <div className="relative aspect-square w-full overflow-hidden rounded-2xl border border-border-gray bg-light-gray shadow-sm animate-fade-in">
             <Image
-              src={product.images[activeImageIdx] || product.image}
+              src={galleryList[activeImageIdx] || product.mainImage || product.image}
               alt={product.name}
               fill
               sizes="(min-width: 768px) 50vw, 100vw"
@@ -159,9 +169,9 @@ export default function ProductDetailPage({ params }: PageProps) {
             />
           </div>
           {/* Thumbnails */}
-          {product.images.length > 1 && (
+          {galleryList.length > 1 && (
             <div className="flex gap-2">
-              {product.images.map((imgUrl, idx) => (
+              {galleryList.map((imgUrl, idx) => (
                 <button
                   key={idx}
                   onClick={() => setActiveImageIdx(idx)}
@@ -250,52 +260,59 @@ export default function ProductDetailPage({ params }: PageProps) {
       </div>
 
       {/* Cut Type Selection System */}
-      <div className="space-y-3.5 border-t border-border-gray/50 pt-5">
-        <h3 className="text-xs font-bold uppercase tracking-wide text-zinc-400">
-          Select Custom Cut Type
-        </h3>
-        <div className="space-y-2.5">
-          {allowedCuts.map((cut) => {
-            const isSelected = selectedCut.id === cut.id;
-            return (
-              <div
-                key={cut.id}
-                onClick={() => setSelectedCut(cut)}
-                className={`flex cursor-pointer items-start gap-4 rounded-2xl border p-4 transition-all hover:shadow-sm active-scale ${
-                  isSelected
-                    ? "border-brand-red bg-brand-red/5"
-                    : "border-border-gray bg-white hover:border-zinc-300"
-                }`}
-              >
-                {/* Visual Cut Icon/Image */}
+      {allowedCuts.length > 0 && (
+        <div className="space-y-3.5 border-t border-border-gray/50 pt-5">
+          <h3 className="text-xs font-bold uppercase tracking-wide text-zinc-400">
+            Select Custom Cut Type
+          </h3>
+          <div className="space-y-2.5">
+            {allowedCuts.map((cut) => {
+              const isSelected = activeCutType?.id === cut.id;
+              return (
                 <div
-                  className={`flex h-14 w-14 shrink-0 items-center justify-center rounded-xl border bg-white p-1.5 transition-all ${
-                    isSelected ? "border-brand-red text-brand-red" : "border-border-gray text-zinc-400"
+                  key={cut.id}
+                  onClick={() => setSelectedCut(cut)}
+                  className={`flex cursor-pointer items-start gap-4 rounded-2xl border p-4 transition-all hover:shadow-sm active-scale ${
+                    isSelected
+                      ? "border-brand-red bg-brand-red/5"
+                      : "border-border-gray bg-white hover:border-zinc-300"
                   }`}
-                  dangerouslySetInnerHTML={{ __html: cut.iconSvg }}
-                />
-
-                {/* Cut Info */}
-                <div className="flex-1 min-w-0">
-                  <div className="flex items-center justify-between">
-                    <h4 className={`text-xs font-bold ${isSelected ? "text-brand-red" : "text-foreground"}`}>
-                      {cut.name}
-                    </h4>
-                    <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${
-                      cut.extraCharge > 0 ? "bg-amber-50 text-amber-700 border border-amber-100" : "bg-zinc-100 text-zinc-600"
-                    }`}>
-                      {cut.extraCharge === 0 ? "Free Cut" : `+₹${cut.extraCharge}`}
-                    </span>
+                >
+                  {/* Visual Cut Image */}
+                  <div className={`relative flex h-14 w-14 shrink-0 items-center justify-center rounded-xl border bg-white p-1 transition-all ${
+                    isSelected ? "border-brand-red" : "border-border-gray"
+                  }`}>
+                    <Image
+                      src={cut.image}
+                      alt={cut.name}
+                      fill
+                      sizes="56px"
+                      className="object-cover"
+                    />
                   </div>
-                  <p className="mt-1 text-[11px] leading-relaxed text-zinc-500">
-                    {cut.description}
-                  </p>
+
+                  {/* Cut Info */}
+                  <div className="flex-1 min-w-0">
+                    <div className="flex items-center justify-between">
+                      <h4 className={`text-xs font-bold ${isSelected ? "text-brand-red" : "text-foreground"}`}>
+                        {cut.name}
+                      </h4>
+                      <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${
+                        cut.extraCharge > 0 ? "bg-amber-50 text-amber-700 border border-amber-100" : "bg-zinc-100 text-zinc-600"
+                      }`}>
+                        {cut.extraCharge === 0 ? "Free Cut" : `+₹${cut.extraCharge}`}
+                      </span>
+                    </div>
+                    <p className="mt-1 text-[11px] leading-relaxed text-zinc-500">
+                      {cut.description}
+                    </p>
+                  </div>
                 </div>
-              </div>
-            );
-          })}
+              );
+            })}
+          </div>
         </div>
-      </div>
+      )}
 
       {/* Special Cut Instructions Box */}
       <div className="space-y-2.5 border-t border-border-gray/50 pt-5">
@@ -363,7 +380,7 @@ export default function ProductDetailPage({ params }: PageProps) {
                 </>
               ) : (
                 <>
-                  Add to Cart • {selectedWeight}
+                  Add to Cart &bull; {selectedWeight}
                 </>
               )}
             </button>
