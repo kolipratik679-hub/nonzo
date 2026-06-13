@@ -4,6 +4,7 @@ import React, { useState, useEffect } from "react";
 import Image from "next/image";
 import { useRouter } from "next/navigation";
 import { useCart } from "@/context/cart-context";
+import { useAuth } from "@/context/auth-context";
 import {
   Minus,
   Plus,
@@ -19,6 +20,7 @@ import {
   Gift,
   ChevronDown,
   PackageOpen,
+  User,
 } from "lucide-react";
 
 export default function CartPage() {
@@ -39,6 +41,7 @@ export default function CartPage() {
     updateCartItemWeight,
     updateCartItemCut,
     cutTypes,
+    deliverySettings,
   } = useCart();
   const router = useRouter();
   const [promoInput, setPromoInput] = useState<string>("");
@@ -54,6 +57,54 @@ export default function CartPage() {
     (sum, item) => sum + (item.originalPrice - item.price) * item.quantity,
     0
   );
+
+  const { user, isLoggedIn, login } = useAuth();
+  const [showAuthModal, setShowAuthModal] = useState<boolean>(false);
+  const [authName, setAuthName] = useState("");
+  const [authMobile, setAuthMobile] = useState("");
+  const [authEmail, setAuthEmail] = useState("");
+  const [authFlat, setAuthFlat] = useState("");
+  const [authArea, setAuthArea] = useState("Ulwe Sector 17");
+  const [authPincode, setAuthPincode] = useState("410206");
+
+  const handleAuthSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!authName || !authMobile || !authFlat || !authPincode) return;
+
+    login(authName, authMobile, authEmail);
+
+    const savedAddressObj = {
+      id: `addr-${Date.now()}`,
+      tag: "Home",
+      fullName: authName,
+      flat: authFlat,
+      area: authArea,
+      city: "Navi Mumbai",
+      pincode: authPincode,
+      phone: authMobile,
+      isDefault: true
+    };
+
+    if (typeof window !== "undefined") {
+      const existing = localStorage.getItem("nonzo_saved_addresses");
+      let parsed = [];
+      if (existing) {
+        try {
+          parsed = JSON.parse(existing);
+        } catch(err) {
+          console.error(err);
+        }
+      }
+      parsed.unshift(savedAddressObj);
+      localStorage.setItem("nonzo_saved_addresses", JSON.stringify(parsed));
+    }
+
+    setShowAuthModal(false);
+    router.push("/checkout");
+  };
+
+  const threshold = deliverySettings?.freeDeliveryThreshold ?? 499;
+  const neededForFree = threshold - subtotal;
 
   if (cart.length === 0) {
     return (
@@ -110,6 +161,37 @@ export default function CartPage() {
           Clear All
         </button>
       </div>
+
+      {/* Free Delivery Progress Bar */}
+      {neededForFree > 0 ? (
+        <div className="rounded-2xl border border-brand-red/10 bg-brand-red/5 p-4 space-y-2.5 shadow-sm">
+          <div className="flex justify-between items-center text-xs">
+            <span className="font-extrabold text-foreground">
+              Add <span className="text-brand-red font-black">₹{neededForFree}</span> more to get <span className="text-brand-red font-black">FREE Delivery</span>
+            </span>
+            <span className="text-[10px] text-zinc-400 font-semibold">
+              Threshold: ₹{threshold}
+            </span>
+          </div>
+          <div className="w-full bg-zinc-200 h-2 rounded-full overflow-hidden">
+            <div
+              className="bg-brand-red h-full rounded-full transition-all duration-500 ease-out"
+              style={{ width: `${Math.min(100, (subtotal / threshold) * 100)}%` }}
+            />
+          </div>
+        </div>
+      ) : (
+        <div className="rounded-2xl border border-emerald-100 bg-emerald-50/50 p-4 space-y-1 shadow-sm flex items-center gap-2">
+          <div className="rounded-full bg-emerald-500 p-1 text-white flex items-center justify-center shrink-0">
+            <svg className="h-3 w-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={3}>
+              <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
+            </svg>
+          </div>
+          <span className="text-xs font-extrabold text-emerald-800">
+            Congratulations! You are eligible for <span className="underline decoration-wavy decoration-emerald-500">FREE Delivery</span>
+          </span>
+        </div>
+      )}
 
       {/* Cart items */}
       <div className="space-y-3">
@@ -420,7 +502,13 @@ export default function CartPage() {
       {/* Proceed to Checkout CTA */}
       <div className="fixed bottom-[57px] left-0 right-0 px-4 z-45 bg-white border-t border-border-gray pt-3 pb-2 md:static md:border-0 md:bg-transparent md:pt-0 md:pb-0 safe-bottom">
         <button
-          onClick={() => router.push("/checkout")}
+          onClick={() => {
+            if (isLoggedIn) {
+              router.push("/checkout");
+            } else {
+              setShowAuthModal(true);
+            }
+          }}
           className="flex w-full items-center justify-between rounded-2xl bg-brand-red px-5 py-4 shadow-[0_4px_20px_rgba(200,16,46,0.3)] transition-all active-scale hover:bg-red-700"
         >
           <div className="text-left">
@@ -439,6 +527,141 @@ export default function CartPage() {
           </div>
         </button>
       </div>
+
+      {/* Auth Modal Gating */}
+      {showAuthModal && (
+        <div className="fixed inset-0 z-50 bg-black/60 flex items-end sm:items-center justify-center p-0 sm:p-4 backdrop-blur-sm">
+          <div className="bg-white w-full sm:max-w-md rounded-t-3xl sm:rounded-2xl p-6 space-y-4 shadow-2xl relative max-h-[90vh] overflow-y-auto animate-slide-up">
+            <button
+              onClick={() => setShowAuthModal(false)}
+              className="absolute top-4 right-4 text-zinc-400 hover:text-foreground"
+            >
+              <X className="h-5 w-5" />
+            </button>
+
+            <div className="text-center space-y-1.5 pb-2">
+              <div className="mx-auto h-12 w-12 rounded-full bg-brand-red/10 flex items-center justify-center mb-1">
+                <User className="h-6 w-6 text-brand-red" />
+              </div>
+              <h3 className="text-base font-black text-foreground uppercase tracking-wider">
+                Create Account to Checkout
+              </h3>
+              <p className="text-[11px] text-zinc-400 leading-normal max-w-xs mx-auto">
+                Guest checkout is not supported. Please register to complete your order.
+              </p>
+            </div>
+
+            <form onSubmit={handleAuthSubmit} className="space-y-3.5">
+              {/* Name */}
+              <div className="space-y-1">
+                <label className="text-[9px] font-black text-zinc-500 uppercase tracking-wider block">
+                  Full Name <span className="text-brand-red">*</span>
+                </label>
+                <input
+                  type="text"
+                  required
+                  placeholder="e.g. Rohan Sharma"
+                  value={authName}
+                  onChange={(e) => setAuthName(e.target.value)}
+                  className="w-full rounded-xl border border-border-gray px-3.5 py-2.5 text-xs outline-none focus:border-brand-red bg-white"
+                />
+              </div>
+
+              {/* Mobile */}
+              <div className="space-y-1">
+                <label className="text-[9px] font-black text-zinc-500 uppercase tracking-wider block">
+                  Mobile Number <span className="text-brand-red">*</span>
+                </label>
+                <input
+                  type="tel"
+                  required
+                  pattern="[0-9]{10}"
+                  placeholder="10-digit mobile number"
+                  value={authMobile}
+                  onChange={(e) => setAuthMobile(e.target.value)}
+                  className="w-full rounded-xl border border-border-gray px-3.5 py-2.5 text-xs outline-none focus:border-brand-red bg-white"
+                />
+              </div>
+
+              {/* Email */}
+              <div className="space-y-1">
+                <label className="text-[9px] font-black text-zinc-500 uppercase tracking-wider block">
+                  Email Address (Optional)
+                </label>
+                <input
+                  type="email"
+                  placeholder="e.g. rohan@example.com"
+                  value={authEmail}
+                  onChange={(e) => setAuthEmail(e.target.value)}
+                  className="w-full rounded-xl border border-border-gray px-3.5 py-2.5 text-xs outline-none focus:border-brand-red bg-white"
+                />
+              </div>
+
+              {/* Address Fields */}
+              <div className="border-t border-zinc-100 pt-3.5 space-y-3.5">
+                <span className="text-[10px] font-black text-foreground uppercase tracking-wide block">
+                  Delivery Address
+                </span>
+                
+                <div className="space-y-1">
+                  <label className="text-[9px] font-black text-zinc-500 uppercase tracking-wider block">
+                    Flat / House No. / Building <span className="text-brand-red">*</span>
+                  </label>
+                  <input
+                    type="text"
+                    required
+                    placeholder="e.g. Flat 402, Sea Breeze Heights"
+                    value={authFlat}
+                    onChange={(e) => setAuthFlat(e.target.value)}
+                    className="w-full rounded-xl border border-border-gray px-3.5 py-2.5 text-xs outline-none focus:border-brand-red bg-white"
+                  />
+                </div>
+
+                <div className="grid grid-cols-2 gap-3.5">
+                  <div className="space-y-1">
+                    <label className="text-[9px] font-black text-zinc-500 uppercase tracking-wider block">
+                      Area Sector <span className="text-brand-red">*</span>
+                    </label>
+                    <select
+                      value={authArea}
+                      onChange={(e) => setAuthArea(e.target.value)}
+                      className="w-full rounded-xl border border-border-gray px-3.5 py-2.5 text-xs outline-none focus:border-brand-red bg-white"
+                    >
+                      <option value="Ulwe Sector 5">Ulwe Sector 5</option>
+                      <option value="Ulwe Sector 8">Ulwe Sector 8</option>
+                      <option value="Ulwe Sector 17">Ulwe Sector 17</option>
+                      <option value="Ulwe Sector 24">Ulwe Sector 24</option>
+                    </select>
+                  </div>
+
+                  <div className="space-y-1">
+                    <label className="text-[9px] font-black text-zinc-500 uppercase tracking-wider block">
+                      Pincode <span className="text-brand-red">*</span>
+                    </label>
+                    <input
+                      type="text"
+                      required
+                      maxLength={6}
+                      placeholder="410206"
+                      value={authPincode}
+                      onChange={(e) => setAuthPincode(e.target.value)}
+                      className="w-full rounded-xl border border-border-gray px-3.5 py-2.5 text-xs outline-none focus:border-brand-red bg-white"
+                    />
+                  </div>
+                </div>
+              </div>
+
+              <button
+                type="submit"
+                className="w-full rounded-xl bg-brand-red py-3.5 text-xs font-black text-white hover:bg-red-700 active-scale shadow-md mt-2 flex items-center justify-center gap-1.5"
+              >
+                Create Account &amp; Proceed to Checkout
+                <ArrowRight className="h-4 w-4" />
+              </button>
+            </form>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

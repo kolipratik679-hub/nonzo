@@ -58,7 +58,15 @@ export default function HomePage() {
     const savedBanners = localStorage.getItem("nonzo_admin_banners");
     if (savedBanners) {
       try {
-        setBanners(JSON.parse(savedBanners).filter((b: any) => b.isActive));
+        const parsed = JSON.parse(savedBanners);
+        const now = new Date();
+        const activeBanners = parsed.filter((b: any) => {
+          if (!b.isActive) return false;
+          if (b.startDate && new Date(b.startDate) > now) return false;
+          if (b.endDate && new Date(b.endDate) < now) return false;
+          return true;
+        });
+        setBanners(activeBanners);
       } catch (e) {
         console.error("Failed to load banners", e);
       }
@@ -72,6 +80,10 @@ export default function HomePage() {
           destinationType: "product",
           destinationValue: "tiger-prawns",
           isActive: true,
+          offerBadge: "Today Special Catch",
+          offerPrice: 299,
+          originalPrice: 350,
+          ctaText: "Shop Now",
         },
         {
           id: "banner-2",
@@ -79,20 +91,29 @@ export default function HomePage() {
           subtitle: "Delivered strictly between 0 and 4 degrees.",
           imageUrl: "/images/black pomfret.jpg",
           destinationType: "category",
-          destinationValue: "Fish",
+          destinationValue: "fish",
           isActive: true,
+          offerBadge: "Best Deal",
+          offerPrice: 349,
+          originalPrice: 399,
+          ctaText: "Order Now",
         },
         {
           id: "banner-3",
           title: "Premium Mud Crabs",
           subtitle: "Harvested fresh from mangrove farms daily.",
           imageUrl: "/images/mud crab.jpg",
-          destinationType: "category",
-          destinationValue: "Crabs",
+          destinationType: "collection",
+          destinationValue: "best-sellers",
           isActive: true,
+          offerBadge: "Flash Sale",
+          offerPrice: 699,
+          originalPrice: 800,
+          ctaText: "Buy Now",
         },
       ];
       setBanners(defaultBanners);
+      localStorage.setItem("nonzo_admin_banners", JSON.stringify(defaultBanners));
     }
   }, []);
 
@@ -156,7 +177,9 @@ export default function HomePage() {
                   if (banner.destinationType === "product") {
                     router.push(`/product/${banner.destinationValue}`);
                   } else if (banner.destinationType === "category") {
-                    setSelectedCategory(banner.destinationValue);
+                    router.push(`/category/${banner.destinationValue.toLowerCase()}`);
+                  } else if (banner.destinationType === "collection") {
+                    router.push(`/collection/${banner.destinationValue.toLowerCase()}`);
                   } else if (banner.destinationValue) {
                     router.push(banner.destinationValue);
                   }
@@ -173,16 +196,46 @@ export default function HomePage() {
                 />
                 
                 {/* Gradient overlay */}
-                <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-black/35 to-black/10 flex flex-col justify-end p-5 md:p-8">
-                  <div className="max-w-lg space-y-1.5 md:space-y-2.5">
-                    <h2 className="text-sm font-black uppercase tracking-wider text-brand-red md:text-base">
+                <div className="absolute inset-0 bg-gradient-to-t from-black/90 via-black/45 to-black/10 flex flex-col justify-end p-5 md:p-8">
+                  <div className="max-w-lg space-y-1.5 md:space-y-2">
+                    {/* Badge */}
+                    {banner.offerBadge && (
+                      <span className="inline-block self-start text-[8px] md:text-[9px] uppercase font-black tracking-widest text-white bg-brand-red px-2.5 py-1 rounded shadow-sm">
+                        {banner.offerBadge}
+                      </span>
+                    )}
+
+                    <h2 className="text-base font-black uppercase tracking-wider text-white md:text-2xl pt-1">
                       {banner.title}
                     </h2>
-                    <p className="text-white text-xs font-bold leading-relaxed md:text-sm">
-                      {banner.subtitle}
-                    </p>
-                    <span className="inline-flex items-center gap-1 text-[10px] md:text-xs font-bold text-white bg-white/20 hover:bg-white/30 backdrop-blur px-3.5 py-1 rounded-full active-scale transition-colors mt-2.5">
-                      Shop Now →
+                    
+                    {banner.subtitle && (
+                      <p className="text-zinc-200 text-xs font-bold leading-relaxed md:text-sm">
+                        {banner.subtitle}
+                      </p>
+                    )}
+
+                    {/* Pricing */}
+                    {banner.offerPrice && (
+                      <div className="flex items-center gap-2 mt-1.5">
+                        <span className="text-white text-base md:text-xl font-black">
+                          ₹{banner.offerPrice}
+                        </span>
+                        {banner.originalPrice && banner.originalPrice > banner.offerPrice && (
+                          <>
+                            <span className="text-zinc-400 text-xs line-through">
+                              ₹{banner.originalPrice}
+                            </span>
+                            <span className="text-emerald-400 text-[10px] md:text-xs font-extrabold bg-emerald-500/10 px-2 py-0.5 rounded">
+                              {Math.round(((banner.originalPrice - banner.offerPrice) / banner.originalPrice) * 100)}% OFF
+                            </span>
+                          </>
+                        )}
+                      </div>
+                    )}
+
+                    <span className="inline-flex items-center gap-1 text-[10px] md:text-xs font-extrabold text-white bg-brand-red hover:bg-red-700 px-4 py-1.5 rounded-full active-scale transition-colors mt-2 text-center w-fit shadow-md">
+                      {banner.ctaText || "Shop Now"} →
                     </span>
                   </div>
                 </div>

@@ -18,15 +18,15 @@ import {
   Lock,
   Shield,
   Bell,
-  Building2,
   LogOut,
   CheckCircle2,
   AlertTriangle,
   Flag,
   Hash,
-  Settings,
+  Building2,
 } from "lucide-react";
 import { MOCK_SAVED_ADDRESSES, MOCK_ORDERS } from "@/lib/mock-data";
+import { useAuth } from "@/context/auth-context";
 
 // ── Accordion Row helper ────────────────────────────────────────────
 function AccordionSection({
@@ -116,6 +116,8 @@ function LogoutModal({
 // ── Main Profile Page ───────────────────────────────────────────────
 export default function ProfilePage() {
   const router = useRouter();
+  const { user, login: authLogin, logout: authLogout } = useAuth();
+  
   const [activeAccordion, setActiveAccordion] = useState<string | null>(
     "personal"
   );
@@ -125,24 +127,24 @@ export default function ProfilePage() {
     document.title = "Profile | NONZO";
   }, []);
 
-  // Personal info state
-  const [profile, setProfile] = useState({
-    name: "Rohan Sharma",
-    email: "rohan.sharma@example.com",
-    mobile: "9876543210",
-  });
+  // Personal info state (fallbacks to default Rohan if not logged in or edit form)
   const [isEditingProfile, setIsEditingProfile] = useState<boolean>(false);
-  const [editName, setEditName] = useState(profile.name);
-  const [editEmail, setEditEmail] = useState(profile.email);
-  const [editMobile, setEditMobile] = useState(profile.mobile);
+  const [editName, setEditName] = useState("");
+  const [editEmail, setEditEmail] = useState("");
+  const [editMobile, setEditMobile] = useState("");
 
-  // Business info state
-  const [businessInfo, setBusinessInfo] = useState({
-    gstNumber: "",
-    businessName: "",
-    businessAddress: "",
-  });
-  const [isEditingBusiness, setIsEditingBusiness] = useState<boolean>(false);
+  // Temp login form state for guest profile page
+  const [loginName, setLoginName] = useState("");
+  const [loginMobile, setLoginMobile] = useState("");
+  const [loginEmail, setLoginEmail] = useState("");
+
+  useEffect(() => {
+    if (user) {
+      setEditName(user.name);
+      setEditEmail(user.email || "");
+      setEditMobile(user.mobile);
+    }
+  }, [user]);
 
   // Address Manager
   const [addresses, setAddresses] = useState(MOCK_SAVED_ADDRESSES);
@@ -166,10 +168,22 @@ export default function ProfilePage() {
     setActiveAccordion(activeAccordion === section ? null : section);
   };
 
+  const profile = user || {
+    name: "Guest User",
+    email: "",
+    mobile: "",
+  };
+
   const handleSaveProfile = (e: React.FormEvent) => {
     e.preventDefault();
-    setProfile({ name: editName, email: editEmail, mobile: editMobile });
+    authLogin(editName, editMobile, editEmail);
     setIsEditingProfile(false);
+  };
+
+  const handleLoginFormSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!loginName || !loginMobile) return;
+    authLogin(loginName, loginMobile, loginEmail);
   };
 
   const handleAddAddress = (e: React.FormEvent) => {
@@ -180,12 +194,12 @@ export default function ProfilePage() {
     setIsAddingAddress(false);
     setNewAddress({
       tag: "Home",
-      fullName: "Rohan Sharma",
+      fullName: user ? user.name : "Rohan Sharma",
       flat: "",
       area: "Ulwe Sector 17",
       city: "Navi Mumbai",
       pincode: "410206",
-      phone: "9876543210",
+      phone: user ? user.mobile : "9876543210",
     });
   };
 
@@ -204,6 +218,7 @@ export default function ProfilePage() {
       localStorage.removeItem("nonzo_cart");
       sessionStorage.clear();
     }
+    authLogout();
     setShowLogoutModal(false);
     router.push("/");
   };
@@ -219,8 +234,75 @@ export default function ProfilePage() {
       )}
 
       <div className="space-y-5 pt-4 pb-16">
-        {/* Profile Header card */}
-        <div className="rounded-2xl bg-neutral-950 p-6 text-white flex items-center justify-between shadow-md">
+        {!user ? (
+          <div className="rounded-2xl border border-border-gray bg-white p-6 space-y-4 shadow-md max-w-md mx-auto">
+            <div className="text-center space-y-2">
+              <div className="mx-auto h-12 w-12 rounded-full bg-brand-red/10 flex items-center justify-center">
+                <User className="h-6 w-6 text-brand-red" />
+              </div>
+              <h2 className="text-base font-black text-foreground uppercase tracking-wider">
+                Create Account / Log In
+              </h2>
+              <p className="text-xs text-zinc-400 max-w-xs mx-auto leading-relaxed">
+                Log in to view your orders, manage saved addresses, and access premium customer features.
+              </p>
+            </div>
+            
+            <form onSubmit={handleLoginFormSubmit} className="space-y-4">
+              <div className="space-y-1.5">
+                <label className="text-[10px] font-bold text-zinc-500 block uppercase">
+                  Full Name
+                </label>
+                <input
+                  type="text"
+                  required
+                  placeholder="e.g. Rohan Sharma"
+                  value={loginName}
+                  onChange={(e) => setLoginName(e.target.value)}
+                  className="w-full rounded-xl border border-border-gray px-3.5 py-2.5 text-xs outline-none focus:border-brand-red bg-white"
+                />
+              </div>
+
+              <div className="space-y-1.5">
+                <label className="text-[10px] font-bold text-zinc-500 block uppercase">
+                  Mobile Number
+                </label>
+                <input
+                  type="tel"
+                  required
+                  pattern="[0-9]{10}"
+                  placeholder="e.g. 9876543210"
+                  value={loginMobile}
+                  onChange={(e) => setLoginMobile(e.target.value)}
+                  className="w-full rounded-xl border border-border-gray px-3.5 py-2.5 text-xs outline-none focus:border-brand-red bg-white"
+                />
+              </div>
+
+              <div className="space-y-1.5">
+                <label className="text-[10px] font-bold text-zinc-500 block uppercase">
+                  Email Address (Optional)
+                </label>
+                <input
+                  type="email"
+                  placeholder="e.g. rohan.sharma@example.com"
+                  value={loginEmail}
+                  onChange={(e) => setLoginEmail(e.target.value)}
+                  className="w-full rounded-xl border border-border-gray px-3.5 py-2.5 text-xs outline-none focus:border-brand-red bg-white"
+                />
+              </div>
+
+              <button
+                type="submit"
+                className="w-full rounded-xl bg-brand-red py-3.5 text-xs font-bold text-white hover:bg-red-700 active-scale shadow-md"
+              >
+                Create Account &amp; Continue
+              </button>
+            </form>
+          </div>
+        ) : (
+          <>
+            {/* Profile Header card */}
+            <div className="rounded-2xl bg-neutral-950 p-6 text-white flex items-center justify-between shadow-md">
           <div>
             <span className="text-[10px] uppercase font-bold tracking-widest text-zinc-400">
               Welcome Back
@@ -263,7 +345,7 @@ export default function ProfilePage() {
                 <button
                   onClick={() => {
                     setEditName(profile.name);
-                    setEditEmail(profile.email);
+                    setEditEmail(profile.email || "");
                     setEditMobile(profile.mobile);
                     setIsEditingProfile(true);
                   }}
@@ -526,119 +608,7 @@ export default function ProfilePage() {
             </div>
           </AccordionSection>
 
-          {/* 5. Business Information */}
-          <AccordionSection
-            id="business"
-            icon={Building2}
-            label="Business Information"
-            active={activeAccordion === "business"}
-            onToggle={toggleAccordion}
-          >
-            {!isEditingBusiness ? (
-              <div className="space-y-3.5 text-xs">
-                {[
-                  {
-                    label: "Business Name",
-                    value: businessInfo.businessName || "Not set",
-                  },
-                  {
-                    label: "GST Number",
-                    value: businessInfo.gstNumber || "Not set",
-                  },
-                  {
-                    label: "Business Address",
-                    value: businessInfo.businessAddress || "Not set",
-                  },
-                ].map((row) => (
-                  <div
-                    key={row.label}
-                    className="flex justify-between items-center border-b border-border-gray/30 pb-2"
-                  >
-                    <span className="text-zinc-500 font-medium">{row.label}</span>
-                    <span
-                      className={`font-extrabold ${
-                        row.value === "Not set"
-                          ? "text-zinc-300"
-                          : "text-foreground"
-                      }`}
-                    >
-                      {row.value}
-                    </span>
-                  </div>
-                ))}
-                <button
-                  onClick={() => setIsEditingBusiness(true)}
-                  className="w-full rounded-xl border border-border-gray py-2.5 font-bold text-zinc-700 hover:bg-light-gray transition-all active-scale"
-                >
-                  Add / Edit Business Details
-                </button>
-                <p className="text-[10px] text-zinc-400 leading-relaxed">
-                  Adding a GST number enables you to download GST-compliant invoices for every order.
-                </p>
-              </div>
-            ) : (
-              <form
-                onSubmit={(e) => {
-                  e.preventDefault();
-                  setIsEditingBusiness(false);
-                }}
-                className="space-y-3"
-              >
-                {[
-                  {
-                    label: "Business Name",
-                    key: "businessName",
-                    placeholder: "e.g. Sharma Enterprises",
-                  },
-                  {
-                    label: "GST Number",
-                    key: "gstNumber",
-                    placeholder: "e.g. 27AAPFU0939F1ZV",
-                  },
-                  {
-                    label: "Business Address",
-                    key: "businessAddress",
-                    placeholder: "Registered business address",
-                  },
-                ].map((field) => (
-                  <div key={field.key} className="space-y-1.5">
-                    <label className="text-[10px] font-bold text-zinc-500 block uppercase">
-                      {field.label}
-                    </label>
-                    <input
-                      type="text"
-                      placeholder={field.placeholder}
-                      value={businessInfo[field.key as keyof typeof businessInfo]}
-                      onChange={(e) =>
-                        setBusinessInfo({
-                          ...businessInfo,
-                          [field.key]: e.target.value,
-                        })
-                      }
-                      className="w-full rounded-xl border border-border-gray px-3.5 py-2.5 text-xs outline-none focus:border-brand-red"
-                    />
-                  </div>
-                ))}
-                <div className="flex gap-2.5 pt-1">
-                  <button
-                    type="button"
-                    onClick={() => setIsEditingBusiness(false)}
-                    className="flex-1 rounded-xl border border-border-gray py-2.5 text-xs font-bold text-zinc-600 hover:bg-light-gray"
-                  >
-                    Cancel
-                  </button>
-                  <button
-                    type="submit"
-                    className="flex-1 rounded-xl bg-brand-red py-2.5 text-xs font-bold text-white hover:bg-red-700 active-scale"
-                  >
-                    Save
-                  </button>
-                </div>
-              </form>
-            )}
-          </AccordionSection>
-
-          {/* 6. Customer Support Panel */}
+          {/* 5. Customer Support Panel */}
           <AccordionSection
             id="support"
             icon={Phone}
@@ -771,28 +741,6 @@ export default function ProfilePage() {
             </div>
           </AccordionSection>
         </div>
-
-        {/* Admin Dashboard Control Panel card */}
-        <Link
-          href="/admin"
-          className="flex items-center justify-between rounded-2xl border border-zinc-200 bg-zinc-50 p-4 hover:bg-zinc-100 hover:border-zinc-300 transition-all active-scale"
-        >
-          <div className="flex items-center gap-3">
-            <div className="rounded-xl bg-white border border-zinc-200 p-2.5">
-              <Settings className="h-5 w-5 text-brand-red" />
-            </div>
-            <div>
-              <h3 className="text-xs font-bold text-foreground">
-                Admin Dashboard Control Panel
-              </h3>
-              <p className="text-[10px] text-zinc-400 mt-0.5">
-                Manage delivery slots, settings, and homepage hero banner carousels.
-              </p>
-            </div>
-          </div>
-          <ChevronDown className="h-4 w-4 text-zinc-400 -rotate-90" />
-        </Link>
-
         {/* Logout button */}
         <button
           onClick={() => setShowLogoutModal(true)}
@@ -801,6 +749,8 @@ export default function ProfilePage() {
           <LogOut className="h-4 w-4" />
           Log Out
         </button>
+          </>
+        )}
       </div>
     </>
   );

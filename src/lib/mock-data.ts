@@ -471,18 +471,40 @@ export const MOCK_ORDERS = [
 
 export const WHY_NONZO = [
   {
-    title: "100% Preservative Free",
-    description: "We use only natural ice to maintain freshness. Absolutely no chemical additives or formaldehyde.",
-    iconSvg: `<svg class="w-8 h-8 text-brand-red" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z"/></svg>`
+    title: "100% Fresh Catch",
+    description: "Caught daily by local artisanal fishermen, immediately flash-iced, and delivered straight to your door with zero chemical preservatives.",
+    iconSvg: `<svg viewBox="0 0 64 64" class="w-10 h-10 text-brand-red stroke-current fill-none" xmlns="http://www.w3.org/2000/svg">
+      <path d="M4 32C12 20 28 16 46 26C52 29 56 32 60 32C56 32 52 35 46 38C28 48 12 44 4 32Z" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"/>
+      <path d="M6 32L2 26V38L6 32Z" stroke-width="2.5" stroke-linejoin="round"/>
+      <path d="M30 24C34 26 38 30 38 32C38 34 34 38 30 40" stroke-width="2" stroke-linecap="round"/>
+      <circle cx="48" cy="29" r="2" fill="currentColor"/>
+    </svg>`
   },
   {
-    title: "Cold Chain Controlled",
-    description: "From catch to your kitchen, our seafood is strictly maintained between 0°C and 4°C to seal in nutrients.",
-    iconSvg: `<svg class="w-8 h-8 text-brand-red" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z"/></svg>`
+    title: "Cold Chain Maintained (0°C–4°C)",
+    description: "Strictly maintained under temperature control (0°C to 4°C) at all stages of transport to seal in nutrients, flavor, and texture.",
+    iconSvg: `<svg viewBox="0 0 64 64" class="w-10 h-10 text-brand-red stroke-current fill-none" xmlns="http://www.w3.org/2000/svg">
+      <rect x="26" y="8" width="12" height="36" rx="6" stroke-width="2.5"/>
+      <circle cx="32" cy="48" r="10" stroke-width="2.5"/>
+      <path d="M32 20V40" stroke-width="2.5" stroke-linecap="round"/>
+      <circle cx="32" cy="48" r="5" fill="currentColor"/>
+      <path d="M46 14L42 18M42 14L46 18" stroke-width="2" stroke-linecap="round"/>
+      <path d="M18 14L22 18M22 14L18 18" stroke-width="2" stroke-linecap="round"/>
+      <path d="M14 30H20" stroke-width="2" stroke-linecap="round"/>
+      <path d="M44 30H50" stroke-width="2" stroke-linecap="round"/>
+    </svg>`
   },
   {
-    title: "Artisanal & Traceable",
-    description: "Sourced daily from sustainable coastal waters. Know exactly where your fish was landed.",
-    iconSvg: `<svg class="w-8 h-8 text-brand-red" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z"/><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 11a3 3 0 11-6 0 3 3 0 016 0z"/></svg>`
+    title: "Professional Cleaning Included",
+    description: "Gutted, scaled, and custom-cut by our in-house experts in a high-hygiene facility. Delivered recipe-ready to your kitchen.",
+    iconSvg: `<svg viewBox="0 0 64 64" class="w-10 h-10 text-brand-red stroke-current fill-none" xmlns="http://www.w3.org/2000/svg">
+      <path d="M14 42L22 50" stroke-width="2.5" stroke-linecap="round"/>
+      <path d="M20 36L48 8C50 6 54 6 56 8C58 10 58 14 56 16L28 44" stroke-width="2.5" stroke-linecap="round"/>
+      <path d="M10 54H16L18 52L12 46L10 48V54Z" stroke-width="2.5" stroke-linejoin="round" fill="currentColor"/>
+      <path d="M38 18L46 26" stroke-width="2" stroke-linecap="round"/>
+      <path d="M30 48C36 48 42 46 46 42C50 38 52 34 52 30" stroke-width="2" stroke-linecap="round" stroke-dasharray="3 3"/>
+      <circle cx="46" cy="46" r="2" fill="currentColor"/>
+      <circle cx="54" cy="38" r="1.5" fill="currentColor"/>
+    </svg>`
   }
 ];

@@ -39,11 +39,24 @@ interface Banner {
   title: string;
   subtitle: string;
   imageUrl: string;
-  destinationType: "product" | "category" | "custom";
+  destinationType: "product" | "category" | "collection" | "custom";
   destinationValue: string;
   isActive: boolean;
   order: number;
+  offerBadge?: string;
+  offerPrice?: number;
+  originalPrice?: number;
+  ctaText?: string;
+  startDate?: string;
+  endDate?: string;
 }
+
+const MOCK_COLLECTIONS = [
+  { id: "best-sellers", name: "Best Sellers" },
+  { id: "fresh-today", name: "Fresh Today" },
+  { id: "limited-stock", name: "Limited Stock" },
+  { id: "weekend-special", name: "Weekend Special" }
+];
 
 const AVAILABLE_CUT_IMAGES = [
   { label: "Whole Fish Image", value: "/images/cuts/whole-cut-fish.png" },
@@ -62,7 +75,7 @@ const AVAILABLE_CUT_IMAGES = [
 export default function AdminDashboard() {
   const router = useRouter();
   const fileInputRef = useRef<HTMLInputElement>(null);
-  const { products, cutTypes, updateProducts, updateCutTypes } = useCart();
+  const { products, cutTypes, updateProducts, updateCutTypes, updateDeliverySettings } = useCart();
   
   // Tabs: 'delivery' | 'banners' | 'cuts' | 'products'
   const [activeTab, setActiveTab] = useState<"delivery" | "banners" | "cuts" | "products">("delivery");
@@ -71,14 +84,22 @@ export default function AdminDashboard() {
   // 1. Delivery slot states
   const [sameDayDelivery, setSameDayDelivery] = useState<boolean>(true);
   const [slots, setSlots] = useState<SlotSetting[]>([]);
+  const [freeDeliveryThreshold, setFreeDeliveryThreshold] = useState<number>(499);
+  const [deliveryCharge, setDeliveryCharge] = useState<number>(39);
 
   // 2. Banner states
   const [banners, setBanners] = useState<Banner[]>([]);
   const [newBannerTitle, setNewBannerTitle] = useState("");
   const [newBannerSubtitle, setNewBannerSubtitle] = useState("");
   const [newBannerImage, setNewBannerImage] = useState<string | null>(null);
-  const [newBannerDestType, setNewBannerDestType] = useState<"product" | "category" | "custom">("product");
+  const [newBannerDestType, setNewBannerDestType] = useState<"product" | "category" | "collection" | "custom">("product");
   const [newBannerDestVal, setNewBannerDestVal] = useState(products[0]?.id || "");
+  const [newBannerBadge, setNewBannerBadge] = useState("");
+  const [newBannerOfferPrice, setNewBannerOfferPrice] = useState<string>("");
+  const [newBannerOriginalPrice, setNewBannerOriginalPrice] = useState<string>("");
+  const [newBannerCtaText, setNewBannerCtaText] = useState("Shop Now");
+  const [newBannerStartDate, setNewBannerStartDate] = useState("");
+  const [newBannerEndDate, setNewBannerEndDate] = useState("");
   const [dragActive, setDragActive] = useState(false);
 
   // 3. Cut Type states
@@ -116,8 +137,10 @@ export default function AdminDashboard() {
     if (savedDelivery) {
       try {
         const parsed = JSON.parse(savedDelivery);
-        setSameDayDelivery(parsed.sameDayDelivery);
-        setSlots(parsed.slots);
+        setSameDayDelivery(parsed.sameDayDelivery ?? true);
+        setSlots(parsed.slots || []);
+        setFreeDeliveryThreshold(parsed.freeDeliveryThreshold ?? 499);
+        setDeliveryCharge(parsed.deliveryCharge ?? 39);
       } catch (e) {
         console.error(e);
       }
@@ -129,9 +152,11 @@ export default function AdminDashboard() {
         { id: "slot-3", time: "5 PM – 9 PM", enabled: true, maxOrders: 15 },
       ];
       setSlots(defaultSlots);
+      setFreeDeliveryThreshold(499);
+      setDeliveryCharge(39);
       localStorage.setItem(
         "nonzo_delivery_settings",
-        JSON.stringify({ sameDayDelivery: true, slots: defaultSlots })
+        JSON.stringify({ sameDayDelivery: true, slots: defaultSlots, freeDeliveryThreshold: 499, deliveryCharge: 39 })
       );
     }
 
@@ -179,8 +204,9 @@ export default function AdminDashboard() {
 
   // ── Save Delivery Settings ──
   const handleSaveDelivery = () => {
-    const data = { sameDayDelivery, slots };
+    const data = { sameDayDelivery, slots, freeDeliveryThreshold, deliveryCharge };
     localStorage.setItem("nonzo_delivery_settings", JSON.stringify(data));
+    updateDeliverySettings(data);
     triggerNotification("Delivery configurations updated successfully!");
   };
 
@@ -251,6 +277,12 @@ export default function AdminDashboard() {
       destinationValue: newBannerDestVal,
       isActive: true,
       order: banners.length + 1,
+      offerBadge: newBannerBadge || undefined,
+      offerPrice: newBannerOfferPrice ? parseInt(newBannerOfferPrice) : undefined,
+      originalPrice: newBannerOriginalPrice ? parseInt(newBannerOriginalPrice) : undefined,
+      ctaText: newBannerCtaText || "Shop Now",
+      startDate: newBannerStartDate || undefined,
+      endDate: newBannerEndDate || undefined,
     };
 
     const updated = [...banners, newBanner];
@@ -261,6 +293,12 @@ export default function AdminDashboard() {
     setNewBannerTitle("");
     setNewBannerSubtitle("");
     setNewBannerImage(null);
+    setNewBannerBadge("");
+    setNewBannerOfferPrice("");
+    setNewBannerOriginalPrice("");
+    setNewBannerCtaText("Shop Now");
+    setNewBannerStartDate("");
+    setNewBannerEndDate("");
     triggerNotification("New hero banner added!");
   };
 
@@ -543,7 +581,7 @@ export default function AdminDashboard() {
               General Logistics
             </h3>
             
-            <div className="flex items-center justify-between py-1.5">
+            <div className="flex items-center justify-between py-1.5 pb-4">
               <div>
                 <span className="text-xs font-bold text-foreground block">Same Day Delivery</span>
                 <span className="text-[10px] text-zinc-400 mt-0.5">Allows customers to select Today for orders if enabled</span>
@@ -559,6 +597,37 @@ export default function AdminDashboard() {
                   <ToggleLeft className="h-9 w-9 text-zinc-300" />
                 )}
               </button>
+            </div>
+
+            {/* Free Delivery Threshold & Charge */}
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 border-t border-zinc-100 pt-4">
+              <div className="space-y-1">
+                <label className="text-[10px] font-bold text-zinc-500 uppercase block">Free Delivery Threshold (₹)</label>
+                <input
+                  type="number"
+                  min={0}
+                  value={freeDeliveryThreshold}
+                  onChange={(e) => setFreeDeliveryThreshold(parseInt(e.target.value) || 0)}
+                  className="w-full rounded-xl border border-border-gray px-3.5 py-2.5 text-xs font-bold outline-none focus:border-brand-red"
+                />
+                <span className="text-[9px] text-zinc-400 block leading-normal">
+                  Orders equal to or above this amount will get free shipping.
+                </span>
+              </div>
+
+              <div className="space-y-1">
+                <label className="text-[10px] font-bold text-zinc-500 uppercase block">Standard Delivery Charge (₹)</label>
+                <input
+                  type="number"
+                  min={0}
+                  value={deliveryCharge}
+                  onChange={(e) => setDeliveryCharge(parseInt(e.target.value) || 0)}
+                  className="w-full rounded-xl border border-border-gray px-3.5 py-2.5 text-xs font-bold outline-none focus:border-brand-red"
+                />
+                <span className="text-[9px] text-zinc-400 block leading-normal">
+                  Flat delivery fee applied to orders below the threshold.
+                </span>
+              </div>
             </div>
           </div>
 
@@ -665,6 +734,84 @@ export default function AdminDashboard() {
                 />
               </div>
 
+              {/* Offer Badge Selector */}
+              <div className="space-y-1">
+                <label className="text-[10px] font-bold text-zinc-500 uppercase">Offer Badge</label>
+                <select
+                  value={newBannerBadge}
+                  onChange={(e) => setNewBannerBadge(e.target.value)}
+                  className="w-full rounded-xl border border-border-gray px-3 py-2.5 text-xs outline-none bg-white focus:border-brand-red"
+                >
+                  <option value="">No Badge</option>
+                  <option value="Today Special Catch">Today Special Catch</option>
+                  <option value="Best Deal">Best Deal</option>
+                  <option value="Flash Sale">Flash Sale</option>
+                  <option value="Fresh Arrival">Fresh Arrival</option>
+                  <option value="Limited Stock">Limited Stock</option>
+                  <option value="Weekend Offer">Weekend Offer</option>
+                </select>
+              </div>
+
+              {/* Pricing row */}
+              <div className="grid grid-cols-2 gap-3.5">
+                <div className="space-y-1">
+                  <label className="text-[10px] font-bold text-zinc-500 uppercase">Offer Price (₹)</label>
+                  <input
+                    type="number"
+                    min={0}
+                    placeholder="e.g. 299"
+                    value={newBannerOfferPrice}
+                    onChange={(e) => setNewBannerOfferPrice(e.target.value)}
+                    className="w-full rounded-xl border border-border-gray px-3.5 py-2.5 text-xs outline-none focus:border-brand-red"
+                  />
+                </div>
+                <div className="space-y-1">
+                  <label className="text-[10px] font-bold text-zinc-500 uppercase">Original Price (₹)</label>
+                  <input
+                    type="number"
+                    min={0}
+                    placeholder="e.g. 350"
+                    value={newBannerOriginalPrice}
+                    onChange={(e) => setNewBannerOriginalPrice(e.target.value)}
+                    className="w-full rounded-xl border border-border-gray px-3.5 py-2.5 text-xs outline-none focus:border-brand-red"
+                  />
+                </div>
+              </div>
+
+              {/* CTA Text */}
+              <div className="space-y-1">
+                <label className="text-[10px] font-bold text-zinc-500 uppercase">CTA Button Text</label>
+                <input
+                  type="text"
+                  placeholder="e.g. Shop Now"
+                  value={newBannerCtaText}
+                  onChange={(e) => setNewBannerCtaText(e.target.value)}
+                  className="w-full rounded-xl border border-border-gray px-3.5 py-2.5 text-xs outline-none focus:border-brand-red"
+                />
+              </div>
+
+              {/* Schedule / Validity dates */}
+              <div className="grid grid-cols-2 gap-3.5">
+                <div className="space-y-1">
+                  <label className="text-[10px] font-bold text-zinc-500 uppercase">Start Date</label>
+                  <input
+                    type="date"
+                    value={newBannerStartDate}
+                    onChange={(e) => setNewBannerStartDate(e.target.value)}
+                    className="w-full rounded-xl border border-border-gray px-3.5 py-2.5 text-xs outline-none focus:border-brand-red bg-white"
+                  />
+                </div>
+                <div className="space-y-1">
+                  <label className="text-[10px] font-bold text-zinc-500 uppercase">End Date</label>
+                  <input
+                    type="date"
+                    value={newBannerEndDate}
+                    onChange={(e) => setNewBannerEndDate(e.target.value)}
+                    className="w-full rounded-xl border border-border-gray px-3.5 py-2.5 text-xs outline-none focus:border-brand-red bg-white"
+                  />
+                </div>
+              </div>
+
               {/* Destination settings */}
               <div className="space-y-3">
                 <div className="space-y-1">
@@ -676,12 +823,14 @@ export default function AdminDashboard() {
                       setNewBannerDestType(val);
                       if (val === "product") setNewBannerDestVal(products[0]?.id || "");
                       else if (val === "category") setNewBannerDestVal(CATEGORIES[0]?.name || "Fish");
+                      else if (val === "collection") setNewBannerDestVal(MOCK_COLLECTIONS[0]?.id || "best-sellers");
                       else setNewBannerDestVal("");
                     }}
                     className="w-full rounded-xl border border-border-gray px-3 py-2.5 text-xs outline-none bg-white focus:border-brand-red"
                   >
                     <option value="product">Link to Product details</option>
                     <option value="category">Link to Category listing</option>
+                    <option value="collection">Link to Collection listing</option>
                     <option value="custom">Custom URL path</option>
                   </select>
                 </div>
@@ -708,6 +857,18 @@ export default function AdminDashboard() {
                     >
                       {CATEGORIES.map((c) => (
                         <option key={c.id} value={c.name}>{c.name}</option>
+                      ))}
+                    </select>
+                  )}
+
+                  {newBannerDestType === "collection" && (
+                    <select
+                      value={newBannerDestVal}
+                      onChange={(e) => setNewBannerDestVal(e.target.value)}
+                      className="w-full rounded-xl border border-border-gray px-3 py-2.5 text-xs outline-none bg-white focus:border-brand-red"
+                    >
+                      {MOCK_COLLECTIONS.map((col) => (
+                        <option key={col.id} value={col.id}>{col.name}</option>
                       ))}
                     </select>
                   )}
@@ -830,14 +991,49 @@ export default function AdminDashboard() {
                     </div>
 
                     {/* Banner Info */}
-                    <div className="flex-1 min-w-0">
-                      <h4 className="text-xs font-bold text-foreground truncate">{banner.title}</h4>
-                      <p className="text-[10px] text-zinc-400 truncate mt-0.5">{banner.subtitle}</p>
+                    <div className="flex-1 min-w-0 space-y-1">
+                      <div className="flex items-center gap-1.5 flex-wrap">
+                        <h4 className="text-xs font-bold text-foreground truncate">{banner.title}</h4>
+                        {banner.offerBadge && (
+                          <span className="rounded bg-brand-red text-white text-[7px] font-black uppercase px-1.5 py-0.5 tracking-wider">
+                            {banner.offerBadge}
+                          </span>
+                        )}
+                      </div>
+                      <p className="text-[10px] text-zinc-400 truncate">{banner.subtitle}</p>
                       
-                      <span className="inline-flex items-center gap-1 rounded bg-zinc-100 border border-border-gray/30 px-1.5 py-0.5 text-[8px] font-bold text-zinc-500 mt-2 uppercase tracking-wide">
-                        <Link2 className="h-2 w-2" />
-                        Link: {banner.destinationType === "custom" ? banner.destinationValue : `${banner.destinationType}:${banner.destinationValue}`}
-                      </span>
+                      {banner.offerPrice && (
+                        <div className="flex items-center gap-1.5 text-[10px]">
+                          <span className="font-extrabold text-foreground">₹{banner.offerPrice}</span>
+                          {banner.originalPrice && banner.originalPrice > banner.offerPrice && (
+                            <>
+                              <span className="text-zinc-400 line-through text-[9px]">₹{banner.originalPrice}</span>
+                              <span className="text-emerald-600 font-extrabold text-[9px] bg-emerald-50 px-1 rounded">
+                                {Math.round(((banner.originalPrice - banner.offerPrice) / banner.originalPrice) * 100)}% OFF
+                              </span>
+                            </>
+                          )}
+                        </div>
+                      )}
+
+                      <div className="flex flex-wrap gap-2 pt-1">
+                        <span className="inline-flex items-center gap-1 rounded bg-zinc-100 border border-border-gray/30 px-1.5 py-0.5 text-[8px] font-bold text-zinc-500 uppercase tracking-wide">
+                          <Link2 className="h-2 w-2" />
+                          Link: {banner.destinationType === "custom" ? banner.destinationValue : `${banner.destinationType}:${banner.destinationValue}`}
+                        </span>
+
+                        {banner.ctaText && (
+                          <span className="inline-flex items-center gap-1 rounded bg-zinc-100 border border-border-gray/30 px-1.5 py-0.5 text-[8px] font-bold text-zinc-500 uppercase tracking-wide">
+                            CTA: {banner.ctaText}
+                          </span>
+                        )}
+
+                        {(banner.startDate || banner.endDate) && (
+                          <span className="inline-flex items-center gap-1 rounded bg-zinc-100 border border-border-gray/30 px-1.5 py-0.5 text-[8px] font-bold text-zinc-500 uppercase tracking-wide">
+                            Dates: {banner.startDate || "Anytime"} to {banner.endDate || "Anytime"}
+                          </span>
+                        )}
+                      </div>
                     </div>
 
                     {/* Actions */}

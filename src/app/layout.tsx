@@ -3,6 +3,7 @@ import { Geist, Geist_Mono } from "next/font/google";
 import "./globals.css";
 import { LocationProvider } from "@/context/location-context";
 import { CartProvider } from "@/context/cart-context";
+import { AuthProvider } from "@/context/auth-context";
 import { SplashScreen } from "@/components/splash-screen";
 import { LocationModal } from "@/components/location-modal";
 import { AppHeader } from "@/components/app-header";
@@ -73,32 +74,34 @@ export default function RootLayout({
       className={`${geistSans.variable} ${geistMono.variable} h-full antialiased`}
     >
       <body className="min-h-full flex flex-col bg-white text-foreground">
-        <LocationProvider>
-          <CartProvider>
-            {/* Netflix-style startup splash */}
-            <SplashScreen />
+        <AuthProvider>
+          <LocationProvider>
+            <CartProvider>
+              {/* Netflix-style startup splash */}
+              <SplashScreen />
 
-            {/* Location gating modal */}
-            <LocationModal />
+              {/* Location gating modal */}
+              <LocationModal />
 
-            {/* Sticky top header */}
-            <AppHeader />
+              {/* Sticky top header */}
+              <AppHeader />
 
-            {/* Main page content */}
-            <main className="flex-1 w-full max-w-7xl mx-auto px-3 pb-24 sm:px-4 md:pb-6 pt-[116px] md:pt-[80px]">
-              {children}
-            </main>
+              {/* Main page content */}
+              <main className="flex-1 w-full max-w-7xl mx-auto px-3 pb-24 sm:px-4 md:pb-6 pt-[72px] md:pt-[80px]">
+                {children}
+              </main>
 
-            {/* Desktop Footer (Hidden on mobile) */}
-            <DesktopFooter />
+              {/* Desktop Footer (Hidden on mobile) */}
+              <DesktopFooter />
 
-            {/* Floating cart summary bar (mobile + desktop) */}
-            <StickyCartBar />
+              {/* Floating cart summary bar (mobile + desktop) */}
+              <StickyCartBar />
 
-            {/* Mobile 4-tab bottom navigation */}
-            <BottomNav />
-          </CartProvider>
-        </LocationProvider>
+              {/* Mobile 4-tab bottom navigation */}
+              <BottomNav />
+            </CartProvider>
+          </LocationProvider>
+        </AuthProvider>
       </body>
     </html>
   );

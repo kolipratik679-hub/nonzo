@@ -3,14 +3,15 @@
 import React, { useState, useEffect } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { ArrowLeft, MapPin, Calendar, Clock, CheckCircle2, Truck, Banknote, Smartphone, CreditCard } from "lucide-react";
+import { ArrowLeft, ArrowRight, MapPin, Calendar, Clock, CheckCircle2, Truck, Banknote, Smartphone, CreditCard, Loader2, AlertTriangle, User, X, ShieldCheck } from "lucide-react";
 import { useCart } from "@/context/cart-context";
 import { useLocation } from "@/context/location-context";
+import { useAuth } from "@/context/auth-context";
 import { MOCK_SAVED_ADDRESSES } from "@/lib/mock-data";
 
 export default function CheckoutPage() {
   const router = useRouter();
-  const { cart, subtotal, cleaningFee, deliveryFee, promoDiscount, finalTotal, clearCart } = useCart();
+  const { cart, subtotal, cleaningFee, deliveryFee, promoDiscount, finalTotal, clearCart, deliverySettings } = useCart();
 
   useEffect(() => {
     document.title = "Checkout | NONZO";
@@ -22,10 +23,10 @@ export default function CheckoutPage() {
   );
   const { selectedLocation } = useLocation();
 
+  const { user, isLoggedIn, login } = useAuth();
+
   // Address selection state
-  const [selectedAddressId, setSelectedAddressId] = useState<string>(
-    MOCK_SAVED_ADDRESSES[0]?.id || ""
-  );
+  const [selectedAddressId, setSelectedAddressId] = useState<string>("");
   
   // New address form state
   const [isAddingAddress, setIsAddingAddress] = useState<boolean>(false);
@@ -38,29 +39,48 @@ export default function CheckoutPage() {
     pincode: "410206",
     phone: ""
   });
-  const [localAddresses, setLocalAddresses] = useState(MOCK_SAVED_ADDRESSES);
+  const [localAddresses, setLocalAddresses] = useState<any[]>([]);
 
-  // Load settings from localStorage with fallback defaults
-  const [adminSettings] = useState(() => {
+  // Synchronize user and addresses
+  useEffect(() => {
     if (typeof window !== "undefined") {
-      const saved = localStorage.getItem("nonzo_delivery_settings");
+      const saved = localStorage.getItem("nonzo_saved_addresses");
       if (saved) {
         try {
-          return JSON.parse(saved);
+          const parsed = JSON.parse(saved);
+          if (parsed && parsed.length > 0) {
+            setLocalAddresses(parsed);
+            setSelectedAddressId(parsed[0].id);
+            return;
+          }
         } catch (e) {
-          console.error("Failed to parse delivery settings", e);
+          console.error("Failed to parse saved addresses", e);
         }
       }
+      
+      // Fallback
+      if (user) {
+        const defaultAddr = {
+          id: `addr-${Date.now()}`,
+          tag: "Home",
+          fullName: user.name,
+          flat: user.address?.flat || "",
+          area: user.address?.area || "Ulwe Sector 17",
+          city: "Navi Mumbai",
+          pincode: user.address?.pincode || "410206",
+          phone: user.mobile,
+          isDefault: true
+        };
+        setLocalAddresses([defaultAddr]);
+        setSelectedAddressId(defaultAddr.id);
+        localStorage.setItem("nonzo_saved_addresses", JSON.stringify([defaultAddr]));
+      } else {
+        setLocalAddresses(MOCK_SAVED_ADDRESSES);
+        setSelectedAddressId(MOCK_SAVED_ADDRESSES[0]?.id || "");
+        localStorage.setItem("nonzo_saved_addresses", JSON.stringify(MOCK_SAVED_ADDRESSES));
+      }
     }
-    return {
-      sameDayDelivery: true,
-      slots: [
-        { id: "slot-1", time: "8 AM – 10 AM", enabled: true, maxOrders: 15 },
-        { id: "slot-2", time: "10 AM – 12 PM", enabled: true, maxOrders: 15 },
-        { id: "slot-3", time: "5 PM – 9 PM", enabled: true, maxOrders: 15 }
-      ]
-    };
-  });
+  }, [user]);
 
   const today = new Date();
   const tomorrow = new Date();
@@ -81,15 +101,60 @@ export default function CheckoutPage() {
   // Default date Tomorrow is automatically selected
   const [deliveryDate, setDeliveryDate] = useState<string>("Tomorrow"); 
 
-  const activeSlots = adminSettings.slots.filter((s: any) => s.enabled);
+  const activeSlots = (deliverySettings?.slots || [
+    { id: "slot-1", time: "8 AM – 10 AM", enabled: true, maxOrders: 15 },
+    { id: "slot-2", time: "10 AM – 12 PM", enabled: true, maxOrders: 15 },
+    { id: "slot-3", time: "5 PM – 9 PM", enabled: true, maxOrders: 15 }
+  ]).filter((s: any) => s.enabled);
+
   const [deliverySlot, setDeliverySlot] = useState<string>(
     activeSlots[0]?.time || "8 AM – 10 AM"
   );
-  const [paymentMethod, setPaymentMethod] = useState<string>("cod"); // "cod" | "upi" | "card"
+  
+  // Razorpay payment integration state
+  const [paymentMethod, setPaymentMethod] = useState<string>("online"); // "online" (Razorpay) | "cod"
+  const [isProcessingPayment, setIsProcessingPayment] = useState<boolean>(false);
+  const [paymentStatusText, setPaymentStatusText] = useState<string>("Launching Secure Checkout...");
+  const [paymentError, setPaymentError] = useState<string | null>(null);
+
+  // Delivery Date Selection constraint alert
+  const [sameDayAlert, setSameDayAlert] = useState<boolean>(false);
+
+  // Guest login flow state
+  const [loginName, setLoginName] = useState("");
+  const [loginMobile, setLoginMobile] = useState("");
+  const [loginEmail, setLoginEmail] = useState("");
+  const [loginFlat, setLoginFlat] = useState("");
+  const [loginArea, setLoginArea] = useState("Ulwe Sector 17");
+  const [loginPincode, setLoginPincode] = useState("410206");
 
   // Order Placement state
   const [isOrderPlaced, setIsOrderPlaced] = useState<boolean>(false);
   const [placedOrderId, setPlacedOrderId] = useState<string>("");
+
+  const handleGuestLoginSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!loginName || !loginMobile || !loginFlat || !loginPincode) return;
+
+    // Log in
+    login(loginName, loginMobile, loginEmail);
+
+    // Save default address
+    const defaultAddr = {
+      id: `addr-${Date.now()}`,
+      tag: "Home",
+      fullName: loginName,
+      flat: loginFlat,
+      area: loginArea,
+      city: "Navi Mumbai",
+      pincode: loginPincode,
+      phone: loginMobile,
+      isDefault: true
+    };
+    setLocalAddresses([defaultAddr]);
+    setSelectedAddressId(defaultAddr.id);
+    localStorage.setItem("nonzo_saved_addresses", JSON.stringify([defaultAddr]));
+  };
 
   const handleAddAddress = (e: React.FormEvent) => {
     e.preventDefault();
@@ -97,9 +162,12 @@ export default function CheckoutPage() {
 
     const id = `addr-${Date.now()}`;
     const added = { ...newAddress, id, isDefault: false };
-    setLocalAddresses([...localAddresses, added]);
+    const updatedList = [...localAddresses, added];
+    setLocalAddresses(updatedList);
     setSelectedAddressId(id);
     setIsAddingAddress(false);
+    localStorage.setItem("nonzo_saved_addresses", JSON.stringify(updatedList));
+
     // Reset form
     setNewAddress({
       tag: "Home",
@@ -112,8 +180,21 @@ export default function CheckoutPage() {
     });
   };
 
-  const handlePlaceOrder = () => {
-    // Generate a random mock order ID
+  const loadRazorpayScript = () => {
+    return new Promise((resolve) => {
+      if ((window as any).Razorpay) {
+        resolve(true);
+        return;
+      }
+      const script = document.createElement("script");
+      script.src = "https://checkout.razorpay.com/v1/checkout.js";
+      script.onload = () => resolve(true);
+      script.onerror = () => resolve(false);
+      document.body.appendChild(script);
+    });
+  };
+
+  const createConfirmedOrder = (paymentId?: string) => {
     const orderId = `NZ-${Math.floor(10000 + Math.random() * 90000)}-${new Date()
       .getFullYear()
       .toString()
@@ -136,6 +217,9 @@ export default function CheckoutPage() {
         price: item.price
       })),
       total: finalTotal,
+      paymentMethod: paymentMethod === "online" ? "Online Payment (Razorpay)" : "Cash On Delivery",
+      paymentStatus: paymentMethod === "online" ? "Paid" : "Pending",
+      paymentId: paymentId || null,
       deliveryAddress: selectedAddress
         ? `${selectedAddress.flat}, ${selectedAddress.area}, ${selectedAddress.city} - ${selectedAddress.pincode}`
         : selectedLocation || "Ulwe, Navi Mumbai"
@@ -155,9 +239,73 @@ export default function CheckoutPage() {
 
     setPlacedOrderId(orderId);
     setIsOrderPlaced(true);
-    
-    // Clear global cart state
     clearCart();
+  };
+
+  const handlePlaceOrder = async () => {
+    setPaymentError(null);
+
+    if (paymentMethod === "cod") {
+      createConfirmedOrder();
+      return;
+    }
+
+    // Online payment via Razorpay
+    setIsProcessingPayment(true);
+    setPaymentStatusText("Loading secure checkout interface...");
+
+    const isLoaded = await loadRazorpayScript();
+    if (!isLoaded) {
+      setIsProcessingPayment(false);
+      setPaymentError("Failed to load Razorpay checkout script. Please check your network connection.");
+      return;
+    }
+
+    const selectedAddress = localAddresses.find((a) => a.id === selectedAddressId);
+    const formattedAddress = selectedAddress
+      ? `${selectedAddress.flat}, ${selectedAddress.area}, ${selectedAddress.city} - ${selectedAddress.pincode}`
+      : selectedLocation || "Ulwe, Navi Mumbai";
+
+    const options = {
+      key: "rzp_test_SwESWXTwV4F46I",
+      amount: finalTotal * 100, // amount in paise
+      currency: "INR",
+      name: "NONZO Seafoods",
+      description: "Secure Order Payment",
+      image: "/NONZO-LOGO.png",
+      handler: function (response: any) {
+        setPaymentStatusText("Verifying payment transaction status...");
+        setTimeout(() => {
+          setIsProcessingPayment(false);
+          createConfirmedOrder(response.razorpay_payment_id);
+        }, 2000);
+      },
+      prefill: {
+        name: user?.name || selectedAddress?.fullName || "",
+        email: user?.email || "",
+        contact: user?.mobile || selectedAddress?.phone || ""
+      },
+      notes: {
+        address: formattedAddress
+      },
+      theme: {
+        color: "#C8102E" // brand red color
+      },
+      modal: {
+        ondismiss: function () {
+          setIsProcessingPayment(false);
+          setPaymentError("Payment verification cancelled. You can retry or complete order via COD.");
+        }
+      }
+    };
+
+    try {
+      const rzp = new (window as any).Razorpay(options);
+      rzp.open();
+    } catch (e: any) {
+      setIsProcessingPayment(false);
+      setPaymentError(`Could not initiate transaction: ${e.message || e}`);
+    }
   };
 
   if (isOrderPlaced) {
@@ -228,6 +376,151 @@ export default function CheckoutPage() {
     );
   }
 
+  if (!isLoggedIn) {
+    return (
+      <div className="space-y-6 pt-4 pb-16">
+        <div className="flex items-center gap-3">
+          <button
+            onClick={() => router.back()}
+            className="flex h-9 w-9 items-center justify-center rounded-full border border-border-gray bg-white transition-all hover:bg-light-gray active-scale"
+          >
+            <ArrowLeft className="h-4 w-4 text-foreground" />
+          </button>
+          <div>
+            <h1 className="text-lg font-black text-foreground uppercase tracking-wider">
+              Secure Checkout
+            </h1>
+            <p className="text-xs text-zinc-500 mt-0.5">
+              Authenticate to complete your order.
+            </p>
+          </div>
+        </div>
+
+        <div className="rounded-2xl border border-border-gray bg-white p-6 space-y-4 shadow-md max-w-md mx-auto">
+          <div className="text-center space-y-1.5 pb-2">
+            <div className="mx-auto h-12 w-12 rounded-full bg-brand-red/10 flex items-center justify-center mb-1">
+              <User className="h-6 w-6 text-brand-red" />
+            </div>
+            <h3 className="text-base font-black text-foreground uppercase tracking-wider">
+              Create Account to Checkout
+            </h3>
+            <p className="text-[11px] text-zinc-400 leading-normal max-w-xs mx-auto">
+              Please enter your contact and delivery address details to proceed. Guest checkout is disabled.
+            </p>
+          </div>
+
+          <form onSubmit={handleGuestLoginSubmit} className="space-y-3.5">
+            {/* Name */}
+            <div className="space-y-1">
+              <label className="text-[9px] font-black text-zinc-500 uppercase tracking-wider block">
+                Full Name <span className="text-brand-red">*</span>
+              </label>
+              <input
+                type="text"
+                required
+                placeholder="e.g. Rohan Sharma"
+                value={loginName}
+                onChange={(e) => setLoginName(e.target.value)}
+                className="w-full rounded-xl border border-border-gray px-3.5 py-2.5 text-xs outline-none focus:border-brand-red bg-white"
+              />
+            </div>
+
+            {/* Mobile */}
+            <div className="space-y-1">
+              <label className="text-[9px] font-black text-zinc-500 uppercase tracking-wider block">
+                Mobile Number <span className="text-brand-red">*</span>
+              </label>
+              <input
+                type="tel"
+                required
+                pattern="[0-9]{10}"
+                placeholder="10-digit mobile number"
+                value={loginMobile}
+                onChange={(e) => setLoginMobile(e.target.value)}
+                className="w-full rounded-xl border border-border-gray px-3.5 py-2.5 text-xs outline-none focus:border-brand-red bg-white"
+              />
+            </div>
+
+            {/* Email */}
+            <div className="space-y-1">
+              <label className="text-[9px] font-black text-zinc-500 uppercase tracking-wider block">
+                Email Address (Optional)
+              </label>
+              <input
+                type="email"
+                placeholder="e.g. rohan@example.com"
+                value={loginEmail}
+                onChange={(e) => setLoginEmail(e.target.value)}
+                className="w-full rounded-xl border border-border-gray px-3.5 py-2.5 text-xs outline-none focus:border-brand-red bg-white"
+              />
+            </div>
+
+            {/* Address Fields */}
+            <div className="border-t border-zinc-100 pt-3.5 space-y-3.5">
+              <span className="text-[10px] font-black text-foreground uppercase tracking-wide block">
+                Delivery Address
+              </span>
+              
+              <div className="space-y-1">
+                <label className="text-[9px] font-black text-zinc-500 uppercase tracking-wider block">
+                  Flat / House No. / Building <span className="text-brand-red">*</span>
+                </label>
+                <input
+                  type="text"
+                  required
+                  placeholder="e.g. Flat 402, Sea Breeze Heights"
+                  value={loginFlat}
+                  onChange={(e) => setLoginFlat(e.target.value)}
+                  className="w-full rounded-xl border border-border-gray px-3.5 py-2.5 text-xs outline-none focus:border-brand-red bg-white"
+                />
+              </div>
+
+              <div className="grid grid-cols-2 gap-3.5">
+                <div className="space-y-1">
+                  <label className="text-[9px] font-black text-zinc-500 uppercase tracking-wider block">
+                    Area Sector <span className="text-brand-red">*</span>
+                  </label>
+                  <select
+                    value={loginArea}
+                    onChange={(e) => setLoginArea(e.target.value)}
+                    className="w-full rounded-xl border border-border-gray px-3.5 py-2.5 text-xs outline-none focus:border-brand-red bg-white"
+                  >
+                    <option value="Ulwe Sector 5">Ulwe Sector 5</option>
+                    <option value="Ulwe Sector 8">Ulwe Sector 8</option>
+                    <option value="Ulwe Sector 17">Ulwe Sector 17</option>
+                    <option value="Ulwe Sector 24">Ulwe Sector 24</option>
+                  </select>
+                </div>
+
+                <div className="space-y-1">
+                  <label className="text-[9px] font-black text-zinc-500 uppercase tracking-wider block">
+                    Pincode <span className="text-brand-red">*</span>
+                  </label>
+                  <input
+                    type="text"
+                    required
+                    maxLength={6}
+                    placeholder="410206"
+                    value={loginPincode}
+                    onChange={(e) => setLoginPincode(e.target.value)}
+                    className="w-full rounded-xl border border-border-gray px-3.5 py-2.5 text-xs outline-none focus:border-brand-red bg-white"
+                  />
+                </div>
+              </div>
+            </div>
+
+            <button
+              type="submit"
+              className="w-full rounded-xl bg-brand-red py-3.5 text-xs font-bold text-white hover:bg-red-700 active-scale shadow-md mt-2"
+            >
+              Save Details &amp; Continue
+            </button>
+          </form>
+        </div>
+      </div>
+    );
+  }
+
   if (cart.length === 0) {
     return (
       <div className="flex min-h-[60vh] flex-col items-center justify-center space-y-4 text-center">
@@ -240,13 +533,13 @@ export default function CheckoutPage() {
   }
 
   // Calculate dynamic dates list
-  const availableDates = [];
-  if (adminSettings.sameDayDelivery) {
-    availableDates.push({ label: "Today", value: "Today", dateObj: today });
-  }
-  availableDates.push({ label: "Tomorrow", value: "Tomorrow", dateObj: tomorrow });
-  availableDates.push({ label: "Day +2", value: "Day +2", dateObj: day2 });
-  availableDates.push({ label: "Day +3", value: "Day +3", dateObj: day3 });
+  const isSameDayEnabled = deliverySettings?.sameDayDelivery ?? true;
+  const availableDates = [
+    { label: "Today", value: "Today", dateObj: today, enabled: isSameDayEnabled },
+    { label: "Tomorrow", value: "Tomorrow", dateObj: tomorrow, enabled: true },
+    { label: "Day +2", value: "Day +2", dateObj: day2, enabled: true },
+    { label: "Day +3", value: "Day +3", dateObj: day3, enabled: true },
+  ];
 
   return (
     <div className="space-y-6 pt-4 pb-36 md:pb-12">
@@ -404,18 +697,29 @@ export default function CheckoutPage() {
           <span className="text-[10px] font-bold text-zinc-500 uppercase tracking-wide flex items-center gap-1">
             <Calendar className="h-3.5 w-3.5 text-brand-red" /> Select Date
           </span>
-          <div className={`grid gap-2.5 ${adminSettings.sameDayDelivery ? "grid-cols-4" : "grid-cols-3"}`}>
+          <div className="grid grid-cols-4 gap-2.5">
             {availableDates.map((d) => {
               const isSelected = deliveryDate === d.value;
+              const isDisabledToday = d.value === "Today" && !d.enabled;
+
               return (
                 <button
                   key={d.value}
                   type="button"
-                  onClick={() => setDeliveryDate(d.value)}
-                  className={`rounded-xl border p-2.5 text-center text-xs font-bold transition-all active-scale ${
-                    isSelected
-                      ? "border-brand-red bg-brand-red/5 text-brand-red"
-                      : "border-border-gray bg-white text-zinc-500 hover:border-zinc-300"
+                  onClick={() => {
+                    if (isDisabledToday) {
+                      setSameDayAlert(true);
+                    } else {
+                      setDeliveryDate(d.value);
+                      setSameDayAlert(false);
+                    }
+                  }}
+                  className={`rounded-xl border p-2.5 text-center text-xs font-bold transition-all ${
+                    isDisabledToday
+                      ? "border-zinc-200 bg-zinc-50/70 text-zinc-400 opacity-60 cursor-not-allowed"
+                      : isSelected
+                      ? "border-brand-red bg-brand-red/5 text-brand-red active-scale"
+                      : "border-border-gray bg-white text-zinc-500 hover:border-zinc-300 active-scale"
                   }`}
                 >
                   {d.label}
@@ -426,6 +730,18 @@ export default function CheckoutPage() {
               );
             })}
           </div>
+
+          {sameDayAlert && (
+            <div className="rounded-xl border border-red-200 bg-red-50 p-3.5 text-xs text-brand-red font-bold flex items-start gap-2.5 animate-fade-in">
+              <AlertTriangle className="h-4.5 w-4.5 shrink-0 mt-0.5" />
+              <div>
+                <p>Same Day Delivery Currently Unavailable.</p>
+                <p className="text-[10px] text-zinc-500 font-medium mt-0.5">
+                  Please contact NONZO Support: <a href="tel:7788996549" className="text-brand-red font-black underline">7788996549</a>
+                </p>
+              </div>
+            </div>
+          )}
         </div>
 
         {/* Slot Selector */}
@@ -499,16 +815,39 @@ export default function CheckoutPage() {
         </h2>
 
         <div className="space-y-2">
-          {/* COD */}
+          {/* Online Payment (Razorpay) */}
           <div
-            onClick={() => setPaymentMethod("cod")}
+            onClick={() => setPaymentMethod("online")}
             className={`flex cursor-pointer items-center justify-between rounded-xl border p-3.5 transition-all ${
-              paymentMethod === "cod" ? "border-brand-red bg-brand-red/5" : "border-border-gray"
+              paymentMethod === "online" ? "border-brand-red bg-brand-red/5" : "border-border-gray bg-white"
             }`}
           >
             <div className="flex items-center gap-2.5">
               <span className="flex h-9 w-9 items-center justify-center rounded-full bg-light-gray">
-                <Banknote className="h-4 w-4 text-zinc-600" />
+                <CreditCard className="h-4.5 w-4.5 text-brand-red" />
+              </span>
+              <div>
+                <span className="text-xs font-extrabold text-foreground block">Online Payment (Razorpay)</span>
+                <span className="text-[10px] text-zinc-400">Cards, UPI, Netbanking, Wallets</span>
+              </div>
+            </div>
+            <div className={`h-4 w-4 rounded-full border flex items-center justify-center ${
+              paymentMethod === "online" ? "border-brand-red bg-brand-red text-white" : "border-border-gray"
+            }`}>
+              {paymentMethod === "online" && <div className="h-1.5 w-1.5 rounded-full bg-white" />}
+            </div>
+          </div>
+
+          {/* COD */}
+          <div
+            onClick={() => setPaymentMethod("cod")}
+            className={`flex cursor-pointer items-center justify-between rounded-xl border p-3.5 transition-all ${
+              paymentMethod === "cod" ? "border-brand-red bg-brand-red/5" : "border-border-gray bg-white"
+            }`}
+          >
+            <div className="flex items-center gap-2.5">
+              <span className="flex h-9 w-9 items-center justify-center rounded-full bg-light-gray">
+                <Banknote className="h-4.5 w-4.5 text-zinc-600" />
               </span>
               <div>
                 <span className="text-xs font-extrabold text-foreground block">Cash On Delivery</span>
@@ -521,53 +860,17 @@ export default function CheckoutPage() {
               {paymentMethod === "cod" && <div className="h-1.5 w-1.5 rounded-full bg-white" />}
             </div>
           </div>
-
-          {/* UPI */}
-          <div
-            onClick={() => setPaymentMethod("upi")}
-            className={`flex cursor-pointer items-center justify-between rounded-xl border p-3.5 transition-all ${
-              paymentMethod === "upi" ? "border-brand-red bg-brand-red/5" : "border-border-gray"
-            }`}
-          >
-            <div className="flex items-center gap-2.5">
-              <span className="flex h-9 w-9 items-center justify-center rounded-full bg-light-gray">
-                <Smartphone className="h-4 w-4 text-violet-600" />
-              </span>
-              <div>
-                <span className="text-xs font-extrabold text-foreground block">UPI (GPay / PhonePe)</span>
-                <span className="text-[10px] text-zinc-400">Instant checkout via active apps</span>
-              </div>
-            </div>
-            <div className={`h-4 w-4 rounded-full border flex items-center justify-center ${
-              paymentMethod === "upi" ? "border-brand-red bg-brand-red text-white" : "border-border-gray"
-            }`}>
-              {paymentMethod === "upi" && <div className="h-1.5 w-1.5 rounded-full bg-white" />}
-            </div>
-          </div>
-
-          {/* Cards */}
-          <div
-            onClick={() => setPaymentMethod("card")}
-            className={`flex cursor-pointer items-center justify-between rounded-xl border p-3.5 transition-all ${
-              paymentMethod === "card" ? "border-brand-red bg-brand-red/5" : "border-border-gray"
-            }`}
-          >
-            <div className="flex items-center gap-2.5">
-              <span className="flex h-9 w-9 items-center justify-center rounded-full bg-light-gray">
-                <CreditCard className="h-4 w-4 text-sky-600" />
-              </span>
-              <div>
-                <span className="text-xs font-extrabold text-foreground block">Credit / Debit Card</span>
-                <span className="text-[10px] text-zinc-400">Visa, Mastercard, RuPay</span>
-              </div>
-            </div>
-            <div className={`h-4 w-4 rounded-full border flex items-center justify-center ${
-              paymentMethod === "card" ? "border-brand-red bg-brand-red text-white" : "border-border-gray"
-            }`}>
-              {paymentMethod === "card" && <div className="h-1.5 w-1.5 rounded-full bg-white" />}
-            </div>
-          </div>
         </div>
+
+        {paymentError && (
+          <div className="rounded-xl border border-red-200 bg-red-50 p-3.5 text-xs text-brand-red font-bold flex items-start gap-2.5 animate-fade-in mt-3">
+            <AlertTriangle className="h-4.5 w-4.5 shrink-0 mt-0.5" />
+            <div>
+              <p>Payment Transaction Error</p>
+              <p className="text-[10px] text-zinc-500 font-medium mt-0.5">{paymentError}</p>
+            </div>
+          </div>
+        )}
       </div>
 
       {/* 4. Order Summary */}
@@ -641,7 +944,7 @@ export default function CheckoutPage() {
       </div>
 
       {/* Bottom Sticky Place Order */}
-      <div className="fixed bottom-[57px] left-0 right-0 z-45 border-t border-border-gray bg-white py-3 px-4 shadow-[0_-8px_24px_rgba(0,0,0,0.06)] md:relative md:bottom-auto md:border-t-0 md:shadow-none md:p-0 md:bg-transparent safe-bottom">
+      <div className="fixed bottom-[57px] left-0 right-0 z-45 border-t border-border-gray bg-white py-3.5 px-4 shadow-[0_-8px_24px_rgba(0,0,0,0.06)] md:relative md:bottom-auto md:border-t-0 md:shadow-none md:p-0 md:bg-transparent safe-bottom">
         <div className="mx-auto flex max-w-7xl items-center justify-between gap-4">
           <div className="hidden md:block">
             <span className="text-[10px] text-zinc-400 block font-semibold">Grand Total</span>
@@ -650,12 +953,47 @@ export default function CheckoutPage() {
 
           <button
             onClick={handlePlaceOrder}
-            className="w-full md:w-auto md:px-20 rounded-xl bg-brand-red py-3.5 text-xs font-extrabold text-white transition-all hover:bg-red-700 active-scale shadow-md shadow-brand-red/10 flex items-center justify-center gap-1.5"
+            className="flex w-full items-center justify-between rounded-2xl bg-brand-red px-5 py-4 shadow-[0_4px_20px_rgba(200,16,46,0.3)] transition-all active-scale hover:bg-red-700 md:w-auto md:min-w-[320px]"
           >
-            Place Order • ₹{finalTotal}
+            <div className="text-left">
+              <span className="text-[10px] uppercase font-extrabold tracking-widest text-white/75 block">Place Order</span>
+              <span className="text-xs font-black text-white">
+                {paymentMethod === "online" ? "Online Payment (Razorpay)" : "Cash On Delivery"}
+              </span>
+            </div>
+            <div className="flex items-center gap-1 font-extrabold text-white text-xs">
+              <span>Pay ₹{finalTotal}</span>
+              <ArrowRight className="h-4 w-4" />
+            </div>
           </button>
         </div>
       </div>
+
+      {/* Secure Payment Processing Loader Overlay */}
+      {isProcessingPayment && (
+        <div className="fixed inset-0 z-50 bg-black/60 flex flex-col items-center justify-center p-4 backdrop-blur-sm animate-fade-in">
+          <div className="bg-white rounded-3xl p-8 space-y-6 shadow-2xl max-w-xs w-full text-center border border-border-gray/30">
+            <div className="relative mx-auto h-16 w-16 flex items-center justify-center">
+              <div className="absolute inset-0 rounded-full border-4 border-zinc-100 border-t-brand-red animate-spin" />
+              <ShieldCheck className="h-7 w-7 text-brand-red animate-pulse" />
+            </div>
+            
+            <div className="space-y-2">
+              <h3 className="text-xs font-black uppercase tracking-wider text-foreground">
+                Secure Payment Processing
+              </h3>
+              <p className="text-[10px] text-zinc-500 font-semibold leading-relaxed">
+                {paymentStatusText}
+              </p>
+            </div>
+            
+            <div className="flex items-center justify-center gap-1.5 text-[9px] uppercase font-black tracking-widest text-zinc-400 bg-zinc-50 py-2 rounded-xl border border-zinc-100">
+              <ShieldCheck className="h-3.5 w-3.5 text-zinc-400" />
+              <span>PCI-DSS Compliant</span>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

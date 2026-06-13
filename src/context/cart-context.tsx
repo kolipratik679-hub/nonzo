@@ -93,6 +93,19 @@ interface CartContextType {
   applyPromoCode: (code: string) => void;
   removePromoCode: () => void;
   setPromoCode: (code: string | null) => void;
+  // Delivery Settings
+  deliverySettings: {
+    sameDayDelivery: boolean;
+    slots: { id: string; time: string; enabled: boolean; maxOrders: number }[];
+    freeDeliveryThreshold: number;
+    deliveryCharge: number;
+  };
+  updateDeliverySettings: (settings: {
+    sameDayDelivery: boolean;
+    slots: { id: string; time: string; enabled: boolean; maxOrders: number }[];
+    freeDeliveryThreshold: number;
+    deliveryCharge: number;
+  }) => void;
 }
 
 const CartContext = createContext<CartContextType | undefined>(undefined);
@@ -104,6 +117,17 @@ export function CartProvider({ children }: { children: React.ReactNode }) {
   const [cutTypes, setCutTypes] = useState<CutType[]>(CUT_TYPES);
   const [promoCode, setPromoCode] = useState<string | null>(null);
   const [promoError, setPromoError] = useState<string>("");
+
+  const [deliverySettings, setDeliverySettings] = useState({
+    sameDayDelivery: true,
+    slots: [
+      { id: "slot-1", time: "8 AM – 10 AM", enabled: true, maxOrders: 15 },
+      { id: "slot-2", time: "10 AM – 12 PM", enabled: true, maxOrders: 15 },
+      { id: "slot-3", time: "5 PM – 9 PM", enabled: true, maxOrders: 15 }
+    ],
+    freeDeliveryThreshold: 499,
+    deliveryCharge: 39
+  });
 
   // Load cart and admin configurations on mount
   useEffect(() => {
@@ -153,7 +177,43 @@ export function CartProvider({ children }: { children: React.ReactNode }) {
     } catch (e) {
       console.error("Failed to load cut types", e);
     }
+
+    // Load delivery settings
+    try {
+      const savedDelivery = localStorage.getItem("nonzo_delivery_settings");
+      if (savedDelivery) {
+        const parsed = JSON.parse(savedDelivery);
+        setDeliverySettings({
+          sameDayDelivery: parsed.sameDayDelivery ?? true,
+          slots: parsed.slots ?? [
+            { id: "slot-1", time: "8 AM – 10 AM", enabled: true, maxOrders: 15 },
+            { id: "slot-2", time: "10 AM – 12 PM", enabled: true, maxOrders: 15 },
+            { id: "slot-3", time: "5 PM – 9 PM", enabled: true, maxOrders: 15 }
+          ],
+          freeDeliveryThreshold: parsed.freeDeliveryThreshold ?? 499,
+          deliveryCharge: parsed.deliveryCharge ?? 39
+        });
+      } else {
+        localStorage.setItem("nonzo_delivery_settings", JSON.stringify({
+          sameDayDelivery: true,
+          slots: [
+            { id: "slot-1", time: "8 AM – 10 AM", enabled: true, maxOrders: 15 },
+            { id: "slot-2", time: "10 AM – 12 PM", enabled: true, maxOrders: 15 },
+            { id: "slot-3", time: "5 PM – 9 PM", enabled: true, maxOrders: 15 }
+          ],
+          freeDeliveryThreshold: 499,
+          deliveryCharge: 39
+        }));
+      }
+    } catch (e) {
+      console.error("Failed to load delivery settings", e);
+    }
   }, []);
+
+  const updateDeliverySettings = (newSettings: typeof deliverySettings) => {
+    setDeliverySettings(newSettings);
+    localStorage.setItem("nonzo_delivery_settings", JSON.stringify(newSettings));
+  };
 
   // Persist cart whenever it changes
   const saveCart = (newCart: CartItem[]) => {
@@ -343,9 +403,9 @@ export function CartProvider({ children }: { children: React.ReactNode }) {
   // Cleaning fee: ₹30 flat, waived for orders > ₹999
   const cleaningFee = subtotal === 0 ? 0 : subtotal >= 999 ? 0 : 30;
 
-  // Delivery fee: free above ₹499 or FREESHIP code
-  const isFreeDelivery = subtotal > 499 || promoCode === "FREESHIP";
-  const deliveryFee = subtotal === 0 ? 0 : isFreeDelivery ? 0 : 39;
+  // Delivery fee: free above freeDeliveryThreshold or FREESHIP code
+  const isFreeDelivery = subtotal >= deliverySettings.freeDeliveryThreshold || promoCode === "FREESHIP";
+  const deliveryFee = subtotal === 0 ? 0 : isFreeDelivery ? 0 : deliverySettings.deliveryCharge;
 
   // Promo discount
   let promoDiscount = 0;
@@ -386,6 +446,8 @@ export function CartProvider({ children }: { children: React.ReactNode }) {
         applyPromoCode,
         removePromoCode,
         setPromoCode,
+        deliverySettings,
+        updateDeliverySettings,
       }}
     >
       {children}
