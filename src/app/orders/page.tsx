@@ -1,10 +1,9 @@
 "use client";
 
 import React, { useState, useEffect } from "react";
-import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { ArrowLeft, Package, Calendar, MapPin, CheckCircle2, Clock, AlertCircle } from "lucide-react";
-import { MOCK_ORDERS } from "@/lib/mock-data";
+import { ArrowLeft, Package, Calendar, MapPin, CheckCircle2, Clock } from "lucide-react";
+import { useAuth } from "@/context/auth-context";
 
 interface OrderItem {
   name: string;
@@ -12,6 +11,7 @@ interface OrderItem {
   cut: string;
   quantity: number;
   price: number;
+  specialInstructions?: string;
 }
 
 interface Order {
@@ -25,20 +25,21 @@ interface Order {
 
 export default function OrderHistoryPage() {
   const router = useRouter();
+  const { user } = useAuth();
   const [orders, setOrders] = useState<Order[]>([]);
 
   useEffect(() => {
     document.title = "Orders | NONZO";
     
-    // Load placed orders from localStorage and merge with MOCK_ORDERS
-    if (typeof window !== "undefined") {
-      const saved = localStorage.getItem("nonzo_placed_orders");
+    // Load placed orders specific to the logged-in user
+    if (user && typeof window !== "undefined") {
+      const saved = localStorage.getItem(`nonzo_orders_${user.mobile}`);
       const localOrders = saved ? JSON.parse(saved) : [];
-      setOrders([...localOrders, ...MOCK_ORDERS]);
+      setOrders(localOrders);
     } else {
-      setOrders(MOCK_ORDERS);
+      setOrders([]);
     }
-  }, []);
+  }, [user]);
 
   return (
     <div className="space-y-6 pt-4 pb-16">
@@ -118,18 +119,26 @@ export default function OrderHistoryPage() {
                 {/* Items breakdown list */}
                 <div className="space-y-3">
                   {ord.items.map((item, idx) => (
-                    <div key={idx} className="flex justify-between items-start gap-4 text-xs">
-                      <div className="min-w-0 flex-1">
-                        <span className="font-bold text-foreground block truncate">
-                          {item.name}
-                        </span>
-                        <span className="text-[10px] text-zinc-400 block mt-0.5 font-medium">
-                          Cut: {item.cut} · Portion: {item.weight} x {item.quantity}
+                    <div key={idx} className="flex flex-col gap-1.5 text-xs border-b border-zinc-50 pb-3 last:border-b-0 last:pb-0">
+                      <div className="flex justify-between items-start gap-4">
+                        <div className="min-w-0 flex-1">
+                          <span className="font-bold text-foreground block truncate">
+                            {item.name}
+                          </span>
+                          <span className="text-[10px] text-zinc-400 block mt-0.5 font-medium">
+                            Cut: {item.cut} &bull; Portion: {item.weight} x {item.quantity}
+                          </span>
+                        </div>
+                        <span className="font-black text-foreground shrink-0">
+                          ₹{item.price * item.quantity}
                         </span>
                       </div>
-                      <span className="font-black text-foreground shrink-0">
-                        ₹{item.price * item.quantity}
-                      </span>
+                      {item.specialInstructions && item.cut === "Special Cut" && (
+                        <div className="mt-1 text-[10px] text-zinc-600 bg-zinc-50 border border-zinc-100 rounded-lg p-2.5 italic">
+                          <strong className="text-[8px] uppercase font-extrabold text-zinc-400 block tracking-wider not-italic mb-0.5">Cut Preference Note:</strong>
+                          &quot;{item.specialInstructions}&quot;
+                        </div>
+                      )}
                     </div>
                   ))}
                 </div>

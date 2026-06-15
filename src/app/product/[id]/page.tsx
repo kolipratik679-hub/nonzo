@@ -315,18 +315,24 @@ export default function ProductDetailPage({ params }: PageProps) {
       )}
 
       {/* Special Cut Instructions Box */}
-      <div className="space-y-2.5 border-t border-border-gray/50 pt-5">
-        <label className="text-xs font-bold uppercase tracking-wide text-zinc-400 block">
-          Special Prep Instructions (Optional)
-        </label>
-        <textarea
-          rows={2}
-          value={specialInstructions}
-          onChange={(e) => setSpecialInstructions(e.target.value)}
-          placeholder="e.g. Cut into very small pieces, remove fins, pack separately..."
-          className="w-full rounded-2xl border border-border-gray bg-white p-3.5 text-xs outline-none focus:border-brand-red focus:ring-1 focus:ring-brand-red"
-        />
-      </div>
+      {activeCutType?.id === "special-cut" && (
+        <div className="space-y-2.5 border-t border-border-gray/50 pt-5 animate-fade-in">
+          <label className="text-xs font-bold uppercase tracking-wide text-zinc-400 block">
+            Describe your cut preference
+          </label>
+          <textarea
+            rows={4}
+            maxLength={200}
+            value={specialInstructions}
+            onChange={(e) => setSpecialInstructions(e.target.value.slice(0, 200))}
+            placeholder="Thin slices for fry&#10;Medium curry pieces&#10;Keep head attached&#10;Remove skin"
+            className="w-full rounded-2xl border border-border-gray bg-white p-3.5 text-xs outline-none focus:border-brand-red focus:ring-1 focus:ring-brand-red"
+          />
+          <div className="text-right text-[10px] text-zinc-400 font-semibold">
+            {specialInstructions.length}/200 characters
+          </div>
+        </div>
+      )}
 
       {/* Sticky Bottom Bar */}
       <div className="fixed bottom-0 left-0 right-0 z-45 border-t border-zinc-800 bg-[#111111] py-3 px-4 shadow-[0_-8px_24px_rgba(0,0,0,0.3)] safe-bottom text-white md:relative md:border-t-0 md:shadow-none md:p-0 md:bg-transparent md:text-foreground">

@@ -1,17 +1,33 @@
 "use client";
 
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useRef } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { ArrowLeft, ArrowRight, MapPin, Calendar, Clock, CheckCircle2, Truck, Banknote, Smartphone, CreditCard, Loader2, AlertTriangle, User, X, ShieldCheck } from "lucide-react";
+import {
+  ArrowLeft,
+  ArrowRight,
+  MapPin,
+  Calendar,
+  Clock,
+  CheckCircle2,
+  Truck,
+  Banknote,
+  CreditCard,
+  Loader2,
+  AlertTriangle,
+  User,
+  X,
+  ShieldCheck,
+  Edit2,
+  Trash2,
+} from "lucide-react";
 import { useCart } from "@/context/cart-context";
 import { useLocation } from "@/context/location-context";
 import { useAuth } from "@/context/auth-context";
-import { MOCK_SAVED_ADDRESSES } from "@/lib/mock-data";
 
 export default function CheckoutPage() {
   const router = useRouter();
-  const { cart, subtotal, cleaningFee, deliveryFee, promoDiscount, finalTotal, clearCart, deliverySettings } = useCart();
+  const { cart, subtotal, deliveryFee, promoDiscount, finalTotal, clearCart, deliverySettings } = useCart();
 
   useEffect(() => {
     document.title = "Checkout | NONZO";
@@ -22,14 +38,29 @@ export default function CheckoutPage() {
     0
   );
   const { selectedLocation } = useLocation();
+  const { user, isLoggedIn, login, sendOtp, verifyOtp } = useAuth();
 
-  const { user, isLoggedIn, login } = useAuth();
-
-  // Address selection state
+  // Address list selection state
+  const [localAddresses, setLocalAddresses] = useState<any[]>([]);
   const [selectedAddressId, setSelectedAddressId] = useState<string>("");
-  
-  // New address form state
+
+  // Gating Auth State Flow for Non-logged in checkout view
+  const [authStep, setAuthStep] = useState<"mobile" | "otp" | "profile" | "address">("mobile");
+  const [authMobile, setAuthMobile] = useState("");
+  const [authOtp, setAuthOtp] = useState("");
+  const [authName, setAuthName] = useState("");
+  const [authEmail, setAuthEmail] = useState("");
+  const [authFlat, setAuthFlat] = useState("");
+  const [authArea, setAuthArea] = useState("Ulwe Sector 17");
+  const [authPincode, setAuthPincode] = useState("410206");
+  const [authLandmark, setAuthLandmark] = useState("");
+  const [isAuthLoading, setIsAuthLoading] = useState(false);
+  const [authError, setAuthError] = useState<string | null>(null);
+
+  // Address Forms state
   const [isAddingAddress, setIsAddingAddress] = useState<boolean>(false);
+  const [editingAddressId, setEditingAddressId] = useState<string | null>(null);
+
   const [newAddress, setNewAddress] = useState({
     tag: "Home",
     fullName: "",
@@ -37,47 +68,36 @@ export default function CheckoutPage() {
     area: selectedLocation || "Ulwe Sector 17",
     city: "Navi Mumbai",
     pincode: "410206",
-    phone: ""
+    phone: "",
+    landmark: "",
   });
-  const [localAddresses, setLocalAddresses] = useState<any[]>([]);
+
+  const [editAddressData, setEditAddressData] = useState<any>(null);
 
   // Synchronize user and addresses
   useEffect(() => {
     if (typeof window !== "undefined") {
-      const saved = localStorage.getItem("nonzo_saved_addresses");
-      if (saved) {
-        try {
-          const parsed = JSON.parse(saved);
-          if (parsed && parsed.length > 0) {
-            setLocalAddresses(parsed);
-            setSelectedAddressId(parsed[0].id);
-            return;
-          }
-        } catch (e) {
-          console.error("Failed to parse saved addresses", e);
-        }
-      }
-      
-      // Fallback
       if (user) {
-        const defaultAddr = {
-          id: `addr-${Date.now()}`,
-          tag: "Home",
-          fullName: user.name,
-          flat: user.address?.flat || "",
-          area: user.address?.area || "Ulwe Sector 17",
-          city: "Navi Mumbai",
-          pincode: user.address?.pincode || "410206",
-          phone: user.mobile,
-          isDefault: true
-        };
-        setLocalAddresses([defaultAddr]);
-        setSelectedAddressId(defaultAddr.id);
-        localStorage.setItem("nonzo_saved_addresses", JSON.stringify([defaultAddr]));
+        const addressKey = `nonzo_addresses_${user.mobile}`;
+        const saved = localStorage.getItem(addressKey);
+        if (saved) {
+          try {
+            const parsed = JSON.parse(saved);
+            if (parsed && parsed.length > 0) {
+              setLocalAddresses(parsed);
+              const defaultAddr = parsed.find((a: any) => a.isDefault) || parsed[0];
+              setSelectedAddressId(defaultAddr.id);
+              return;
+            }
+          } catch (e) {
+            console.error("Failed to parse saved addresses", e);
+          }
+        }
+        setLocalAddresses([]);
+        setSelectedAddressId("");
       } else {
-        setLocalAddresses(MOCK_SAVED_ADDRESSES);
-        setSelectedAddressId(MOCK_SAVED_ADDRESSES[0]?.id || "");
-        localStorage.setItem("nonzo_saved_addresses", JSON.stringify(MOCK_SAVED_ADDRESSES));
+        setLocalAddresses([]);
+        setSelectedAddressId("");
       }
     }
   }, [user]);
@@ -98,7 +118,6 @@ export default function CheckoutPage() {
     });
   };
 
-  // Default date Tomorrow is automatically selected
   const [deliveryDate, setDeliveryDate] = useState<string>("Tomorrow"); 
 
   const activeSlots = (deliverySettings?.slots || [
@@ -112,7 +131,7 @@ export default function CheckoutPage() {
   );
   
   // Razorpay payment integration state
-  const [paymentMethod, setPaymentMethod] = useState<string>("online"); // "online" (Razorpay) | "cod"
+  const [paymentMethod, setPaymentMethod] = useState<string>("online"); 
   const [isProcessingPayment, setIsProcessingPayment] = useState<boolean>(false);
   const [paymentStatusText, setPaymentStatusText] = useState<string>("Launching Secure Checkout...");
   const [paymentError, setPaymentError] = useState<string | null>(null);
@@ -120,40 +139,91 @@ export default function CheckoutPage() {
   // Delivery Date Selection constraint alert
   const [sameDayAlert, setSameDayAlert] = useState<boolean>(false);
 
-  // Guest login flow state
-  const [loginName, setLoginName] = useState("");
-  const [loginMobile, setLoginMobile] = useState("");
-  const [loginEmail, setLoginEmail] = useState("");
-  const [loginFlat, setLoginFlat] = useState("");
-  const [loginArea, setLoginArea] = useState("Ulwe Sector 17");
-  const [loginPincode, setLoginPincode] = useState("410206");
-
   // Order Placement state
   const [isOrderPlaced, setIsOrderPlaced] = useState<boolean>(false);
   const [placedOrderId, setPlacedOrderId] = useState<string>("");
 
-  const handleGuestLoginSubmit = (e: React.FormEvent) => {
+  const handleSendOtpSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!loginName || !loginMobile || !loginFlat || !loginPincode) return;
+    if (!authMobile || authMobile.length !== 10) {
+      setAuthError("Please enter a valid 10-digit mobile number");
+      return;
+    }
+    setAuthError(null);
+    setIsAuthLoading(true);
+    try {
+      await sendOtp(authMobile);
+      setAuthStep("otp");
+    } catch (err) {
+      setAuthError("Failed to send verification code");
+    } finally {
+      setIsAuthLoading(false);
+    }
+  };
 
-    // Log in
-    login(loginName, loginMobile, loginEmail);
+  const handleVerifyOtpSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!authOtp || authOtp.length < 4) {
+      setAuthError("Please enter a valid OTP code");
+      return;
+    }
+    setAuthError(null);
+    setIsAuthLoading(true);
+    try {
+      const res = await verifyOtp(authMobile, authOtp);
+      if (res.success) {
+        if (res.isExisting) {
+          // Logged in successfully, loads saved user specific data automatically
+          setAuthError(null);
+        } else {
+          setAuthStep("profile");
+        }
+      } else {
+        setAuthError("Incorrect code. Try 123456.");
+      }
+    } catch (err) {
+      setAuthError("Verification failed.");
+    } finally {
+      setIsAuthLoading(false);
+    }
+  };
 
-    // Save default address
-    const defaultAddr = {
+  const handleProfileSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!authName.trim()) {
+      setAuthError("Please enter your full name");
+      return;
+    }
+    setAuthError(null);
+    setAuthStep("address");
+  };
+
+  const handleAddressSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!authFlat.trim() || !authPincode.trim()) {
+      setAuthError("Please fill out flat details and pincode");
+      return;
+    }
+    setAuthError(null);
+
+    login(authName, authMobile, authEmail);
+
+    const savedAddressObj = {
       id: `addr-${Date.now()}`,
       tag: "Home",
-      fullName: loginName,
-      flat: loginFlat,
-      area: loginArea,
+      fullName: authName,
+      flat: authFlat,
+      area: authArea,
       city: "Navi Mumbai",
-      pincode: loginPincode,
-      phone: loginMobile,
+      pincode: authPincode,
+      phone: authMobile,
+      landmark: authLandmark || "",
+      latitude: null,
+      longitude: null,
       isDefault: true
     };
-    setLocalAddresses([defaultAddr]);
-    setSelectedAddressId(defaultAddr.id);
-    localStorage.setItem("nonzo_saved_addresses", JSON.stringify([defaultAddr]));
+
+    localStorage.setItem(`nonzo_addresses_${authMobile}`, JSON.stringify([savedAddressObj]));
   };
 
   const handleAddAddress = (e: React.FormEvent) => {
@@ -161,12 +231,22 @@ export default function CheckoutPage() {
     if (!newAddress.fullName || !newAddress.flat || !newAddress.phone) return;
 
     const id = `addr-${Date.now()}`;
-    const added = { ...newAddress, id, isDefault: false };
+    const added = {
+      ...newAddress,
+      id,
+      landmark: newAddress.landmark || "",
+      latitude: null,
+      longitude: null,
+      isDefault: localAddresses.length === 0,
+    };
     const updatedList = [...localAddresses, added];
     setLocalAddresses(updatedList);
     setSelectedAddressId(id);
     setIsAddingAddress(false);
-    localStorage.setItem("nonzo_saved_addresses", JSON.stringify(updatedList));
+
+    if (user) {
+      localStorage.setItem(`nonzo_addresses_${user.mobile}`, JSON.stringify(updatedList));
+    }
 
     // Reset form
     setNewAddress({
@@ -176,8 +256,62 @@ export default function CheckoutPage() {
       area: selectedLocation || "Ulwe Sector 17",
       city: "Navi Mumbai",
       pincode: "410206",
-      phone: ""
+      phone: "",
+      landmark: "",
     });
+  };
+
+  const handleEditAddressStart = (addr: any, e: React.MouseEvent) => {
+    e.stopPropagation();
+    setEditingAddressId(addr.id);
+    setEditAddressData({ ...addr });
+  };
+
+  const handleSaveEditAddress = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!editAddressData.fullName || !editAddressData.flat || !editAddressData.phone) return;
+
+    const updatedList = localAddresses.map((a) =>
+      a.id === editAddressData.id ? { ...editAddressData } : a
+    );
+    setLocalAddresses(updatedList);
+    setEditingAddressId(null);
+    setEditAddressData(null);
+
+    if (user) {
+      localStorage.setItem(`nonzo_addresses_${user.mobile}`, JSON.stringify(updatedList));
+    }
+  };
+
+  const handleDeleteAddress = (id: string, e: React.MouseEvent) => {
+    e.stopPropagation();
+    const updatedList = localAddresses.filter((a) => a.id !== id);
+    setLocalAddresses(updatedList);
+
+    if (selectedAddressId === id) {
+      if (updatedList.length > 0) {
+        const defaultAddr = updatedList.find((a) => a.isDefault) || updatedList[0];
+        setSelectedAddressId(defaultAddr.id);
+      } else {
+        setSelectedAddressId("");
+      }
+    }
+
+    if (user) {
+      localStorage.setItem(`nonzo_addresses_${user.mobile}`, JSON.stringify(updatedList));
+    }
+  };
+
+  const handleSetDefaultAddress = (id: string, e: React.MouseEvent) => {
+    e.stopPropagation();
+    const updatedList = localAddresses.map((a) => ({
+      ...a,
+      isDefault: a.id === id,
+    }));
+    setLocalAddresses(updatedList);
+    if (user) {
+      localStorage.setItem(`nonzo_addresses_${user.mobile}`, JSON.stringify(updatedList));
+    }
   };
 
   const loadRazorpayScript = () => {
@@ -194,7 +328,7 @@ export default function CheckoutPage() {
     });
   };
 
-  const createConfirmedOrder = (paymentId?: string) => {
+  const createConfirmedOrder = (paymentId?: string, rzpOrderId?: string, paymentStatus?: string) => {
     const orderId = `NZ-${Math.floor(10000 + Math.random() * 90000)}-${new Date()
       .getFullYear()
       .toString()
@@ -214,24 +348,33 @@ export default function CheckoutPage() {
         weight: item.weight,
         cut: item.cutName,
         quantity: item.quantity,
-        price: item.price
+        price: item.price,
+        specialInstructions: item.specialInstructions || ""
       })),
       total: finalTotal,
       paymentMethod: paymentMethod === "online" ? "Online Payment (Razorpay)" : "Cash On Delivery",
-      paymentStatus: paymentMethod === "online" ? "Paid" : "Pending",
+      paymentStatus: paymentStatus || (paymentMethod === "online" ? "Paid" : "Pending"),
       paymentId: paymentId || null,
+      razorpayOrderId: rzpOrderId || null,
       deliveryAddress: selectedAddress
         ? `${selectedAddress.flat}, ${selectedAddress.area}, ${selectedAddress.city} - ${selectedAddress.pincode}`
         : selectedLocation || "Ulwe, Navi Mumbai"
     };
 
-    // Save to localStorage
-    if (typeof window !== "undefined") {
+    // Save to user specific order history
+    if (user && typeof window !== "undefined") {
       try {
-        const existing = localStorage.getItem("nonzo_placed_orders");
+        const orderKey = `nonzo_orders_${user.mobile}`;
+        const existing = localStorage.getItem(orderKey);
         const orderList = existing ? JSON.parse(existing) : [];
         orderList.unshift(newOrder);
-        localStorage.setItem("nonzo_placed_orders", JSON.stringify(orderList));
+        localStorage.setItem(orderKey, JSON.stringify(orderList));
+
+        // Save globally for Admin View
+        const globalExisting = localStorage.getItem("nonzo_placed_orders");
+        const globalOrderList = globalExisting ? JSON.parse(globalExisting) : [];
+        globalOrderList.unshift({ ...newOrder, userMobile: user.mobile, userName: user.name });
+        localStorage.setItem("nonzo_placed_orders", JSON.stringify(globalOrderList));
       } catch (e) {
         console.error("Failed to save order to localStorage", e);
       }
@@ -252,54 +395,86 @@ export default function CheckoutPage() {
 
     // Online payment via Razorpay
     setIsProcessingPayment(true);
-    setPaymentStatusText("Loading secure checkout interface...");
-
-    const isLoaded = await loadRazorpayScript();
-    if (!isLoaded) {
-      setIsProcessingPayment(false);
-      setPaymentError("Failed to load Razorpay checkout script. Please check your network connection.");
-      return;
-    }
-
-    const selectedAddress = localAddresses.find((a) => a.id === selectedAddressId);
-    const formattedAddress = selectedAddress
-      ? `${selectedAddress.flat}, ${selectedAddress.area}, ${selectedAddress.city} - ${selectedAddress.pincode}`
-      : selectedLocation || "Ulwe, Navi Mumbai";
-
-    const options = {
-      key: "rzp_test_SwESWXTwV4F46I",
-      amount: finalTotal * 100, // amount in paise
-      currency: "INR",
-      name: "NONZO Seafoods",
-      description: "Secure Order Payment",
-      image: "/NONZO-LOGO.png",
-      handler: function (response: any) {
-        setPaymentStatusText("Verifying payment transaction status...");
-        setTimeout(() => {
-          setIsProcessingPayment(false);
-          createConfirmedOrder(response.razorpay_payment_id);
-        }, 2000);
-      },
-      prefill: {
-        name: user?.name || selectedAddress?.fullName || "",
-        email: user?.email || "",
-        contact: user?.mobile || selectedAddress?.phone || ""
-      },
-      notes: {
-        address: formattedAddress
-      },
-      theme: {
-        color: "#C8102E" // brand red color
-      },
-      modal: {
-        ondismiss: function () {
-          setIsProcessingPayment(false);
-          setPaymentError("Payment verification cancelled. You can retry or complete order via COD.");
-        }
-      }
-    };
+    setPaymentStatusText("Creating secure order on payment server...");
 
     try {
+      const orderRes = await fetch("/api/razorpay/order", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ amount: finalTotal }),
+      });
+
+      if (!orderRes.ok) {
+        const errorData = await orderRes.json();
+        throw new Error(errorData.error || "Failed to create order on payment server");
+      }
+
+      const rzpOrder = await orderRes.json();
+
+      setPaymentStatusText("Launching secure checkout interface...");
+
+      const isLoaded = await loadRazorpayScript();
+      if (!isLoaded) {
+        throw new Error("Failed to load Razorpay checkout script. Check your internet connection.");
+      }
+
+      const selectedAddress = localAddresses.find((a) => a.id === selectedAddressId);
+      const formattedAddress = selectedAddress
+        ? `${selectedAddress.flat}, ${selectedAddress.area}, ${selectedAddress.city} - ${selectedAddress.pincode}`
+        : selectedLocation || "Ulwe, Navi Mumbai";
+
+      const options = {
+        key: process.env.NEXT_PUBLIC_RAZORPAY_KEY_ID || "rzp_test_SwESWXTwV4F46I",
+        amount: rzpOrder.amount,
+        currency: rzpOrder.currency,
+        name: "NONZO Seafoods",
+        description: "Secure Order Payment",
+        image: "/NONZO-LOGO.png",
+        order_id: rzpOrder.id,
+        handler: async function (response: any) {
+          setPaymentStatusText("Verifying payment transaction signature...");
+          try {
+            const verifyRes = await fetch("/api/razorpay/verify", {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({
+                razorpay_order_id: response.razorpay_order_id,
+                razorpay_payment_id: response.razorpay_payment_id,
+                razorpay_signature: response.razorpay_signature,
+              }),
+            });
+
+            if (!verifyRes.ok) {
+              const verifyData = await verifyRes.json();
+              throw new Error(verifyData.error || "Payment signature verification failed");
+            }
+
+            setIsProcessingPayment(false);
+            createConfirmedOrder(response.razorpay_payment_id, response.razorpay_order_id, "Paid");
+          } catch (verifyError: any) {
+            setIsProcessingPayment(false);
+            setPaymentError(verifyError.message || "Payment verification failed. Please try again.");
+          }
+        },
+        prefill: {
+          name: user?.name || selectedAddress?.fullName || "",
+          email: user?.email || "",
+          contact: user?.mobile || selectedAddress?.phone || ""
+        },
+        notes: {
+          address: formattedAddress
+        },
+        theme: {
+          color: "#C8102E"
+        },
+        modal: {
+          ondismiss: function () {
+            setIsProcessingPayment(false);
+            setPaymentError("Payment verification cancelled. You can retry or complete order via COD.");
+          }
+        }
+      };
+
       const rzp = new (window as any).Razorpay(options);
       rzp.open();
     } catch (e: any) {
@@ -361,13 +536,13 @@ export default function CheckoutPage() {
         <div className="pt-4 space-y-3 w-full max-w-md">
           <button
             onClick={() => router.push("/")}
-            className="w-full rounded-xl bg-brand-red py-4 text-xs font-extrabold text-white transition-all hover:bg-red-700 active-scale shadow-md shadow-brand-red/10"
+            className="w-full flex h-14 items-center justify-center rounded-2xl bg-brand-red py-3 text-xs font-black uppercase tracking-wider text-white shadow-[0_4px_20px_rgba(200,16,46,0.3)] transition-all hover:bg-red-700 active-scale"
           >
             Continue Shopping
           </button>
           <button
             onClick={() => router.push("/orders")}
-            className="w-full rounded-xl border border-border-gray bg-white py-4 text-xs font-extrabold text-zinc-700 transition-all hover:bg-light-gray active-scale"
+            className="w-full h-14 rounded-2xl border border-border-gray bg-white py-3 text-xs font-bold text-zinc-700 transition-all hover:bg-light-gray active-scale flex items-center justify-center"
           >
             Track Order Status
           </button>
@@ -376,6 +551,7 @@ export default function CheckoutPage() {
     );
   }
 
+  // Not Logged In Checkout Gating OTP View
   if (!isLoggedIn) {
     return (
       <div className="space-y-6 pt-4 pb-16">
@@ -402,65 +578,137 @@ export default function CheckoutPage() {
               <User className="h-6 w-6 text-brand-red" />
             </div>
             <h3 className="text-base font-black text-foreground uppercase tracking-wider">
-              Create Account to Checkout
+              {authStep === "mobile" && "Login / Register"}
+              {authStep === "otp" && "Verify OTP"}
+              {authStep === "profile" && "Complete Profile"}
+              {authStep === "address" && "Complete Address"}
             </h3>
             <p className="text-[11px] text-zinc-400 leading-normal max-w-xs mx-auto">
-              Please enter your contact and delivery address details to proceed. Guest checkout is disabled.
+              {authStep === "mobile" && "Enter your 10-digit mobile number to verify and proceed."}
+              {authStep === "otp" && `Enter the 6-digit code sent to +91 ${authMobile}.`}
+              {authStep === "profile" && "Please complete your profile to register."}
+              {authStep === "address" && "Please share your default delivery coordinates."}
             </p>
           </div>
 
-          <form onSubmit={handleGuestLoginSubmit} className="space-y-3.5">
-            {/* Name */}
-            <div className="space-y-1">
-              <label className="text-[9px] font-black text-zinc-500 uppercase tracking-wider block">
-                Full Name <span className="text-brand-red">*</span>
-              </label>
-              <input
-                type="text"
-                required
-                placeholder="e.g. Rohan Sharma"
-                value={loginName}
-                onChange={(e) => setLoginName(e.target.value)}
-                className="w-full rounded-xl border border-border-gray px-3.5 py-2.5 text-xs outline-none focus:border-brand-red bg-white"
-              />
+          {authError && (
+            <div className="rounded-xl border border-red-200 bg-red-50 p-3 text-xs text-brand-red font-bold flex items-center gap-2.5 animate-fade-in">
+              <AlertTriangle className="h-4 w-4 shrink-0" />
+              <span>{authError}</span>
             </div>
+          )}
 
-            {/* Mobile */}
-            <div className="space-y-1">
-              <label className="text-[9px] font-black text-zinc-500 uppercase tracking-wider block">
-                Mobile Number <span className="text-brand-red">*</span>
-              </label>
-              <input
-                type="tel"
-                required
-                pattern="[0-9]{10}"
-                placeholder="10-digit mobile number"
-                value={loginMobile}
-                onChange={(e) => setLoginMobile(e.target.value)}
-                className="w-full rounded-xl border border-border-gray px-3.5 py-2.5 text-xs outline-none focus:border-brand-red bg-white"
-              />
-            </div>
+          {authStep === "mobile" && (
+            <form onSubmit={handleSendOtpSubmit} className="space-y-3.5">
+              <div className="space-y-1">
+                <label className="text-[9px] font-black text-zinc-500 uppercase tracking-wider block">
+                  Mobile Number <span className="text-brand-red">*</span>
+                </label>
+                <div className="relative">
+                  <span className="absolute left-3.5 top-1/2 -translate-y-1/2 text-xs font-bold text-zinc-400">+91</span>
+                  <input
+                    type="tel"
+                    required
+                    maxLength={10}
+                    pattern="[0-9]{10}"
+                    placeholder="10-digit number"
+                    value={authMobile}
+                    onChange={(e) => setAuthMobile(e.target.value.replace(/\D/g, ""))}
+                    className="w-full rounded-xl border border-border-gray pl-12 pr-3.5 py-2.5 text-xs outline-none focus:border-brand-red bg-white font-bold"
+                  />
+                </div>
+              </div>
 
-            {/* Email */}
-            <div className="space-y-1">
-              <label className="text-[9px] font-black text-zinc-500 uppercase tracking-wider block">
-                Email Address (Optional)
-              </label>
-              <input
-                type="email"
-                placeholder="e.g. rohan@example.com"
-                value={loginEmail}
-                onChange={(e) => setLoginEmail(e.target.value)}
-                className="w-full rounded-xl border border-border-gray px-3.5 py-2.5 text-xs outline-none focus:border-brand-red bg-white"
-              />
-            </div>
+              <button
+                type="submit"
+                disabled={isAuthLoading || authMobile.length !== 10}
+                className="w-full rounded-xl bg-brand-red py-3.5 text-xs font-bold text-white hover:bg-red-700 active-scale shadow-md disabled:bg-zinc-200 disabled:text-zinc-400 flex items-center justify-center gap-1.5"
+              >
+                {isAuthLoading ? <Loader2 className="h-4 w-4 animate-spin" /> : "Send Verification OTP"}
+              </button>
+            </form>
+          )}
 
-            {/* Address Fields */}
-            <div className="border-t border-zinc-100 pt-3.5 space-y-3.5">
-              <span className="text-[10px] font-black text-foreground uppercase tracking-wide block">
-                Delivery Address
-              </span>
-              
+          {authStep === "otp" && (
+            <form onSubmit={handleVerifyOtpSubmit} className="space-y-3.5">
+              <div className="space-y-1">
+                <label className="text-[9px] font-black text-zinc-500 uppercase tracking-wider block">
+                  Verification OTP <span className="text-brand-red">*</span>
+                </label>
+                <input
+                  type="text"
+                  required
+                  maxLength={6}
+                  placeholder="Enter code (Try: 123456)"
+                  value={authOtp}
+                  onChange={(e) => setAuthOtp(e.target.value.replace(/\D/g, ""))}
+                  className="w-full rounded-xl border border-border-gray px-3.5 py-2.5 text-xs text-center tracking-widest outline-none focus:border-brand-red bg-white font-bold"
+                />
+                <span className="text-[9px] text-zinc-400 block text-center mt-1">
+                  Demo: Use code <strong className="text-zinc-600">123456</strong> or <strong className="text-zinc-600">1234</strong>.
+                </span>
+              </div>
+
+              <div className="flex gap-2.5">
+                <button
+                  type="button"
+                  onClick={() => { setAuthStep("mobile"); setAuthError(null); }}
+                  className="flex-1 rounded-xl border border-border-gray py-3 text-xs font-bold text-zinc-600 hover:bg-light-gray"
+                >
+                  Go Back
+                </button>
+                <button
+                  type="submit"
+                  disabled={isAuthLoading || authOtp.length < 4}
+                  className="flex-1 rounded-xl bg-brand-red py-3 text-xs font-bold text-white hover:bg-red-700 active-scale disabled:bg-zinc-200 disabled:text-zinc-400 flex items-center justify-center"
+                >
+                  {isAuthLoading ? <Loader2 className="h-4 w-4 animate-spin" /> : "Verify OTP"}
+                </button>
+              </div>
+            </form>
+          )}
+
+          {authStep === "profile" && (
+            <form onSubmit={handleProfileSubmit} className="space-y-3.5">
+              <div className="space-y-1">
+                <label className="text-[9px] font-black text-zinc-500 uppercase tracking-wider block">
+                  Full Name <span className="text-brand-red">*</span>
+                </label>
+                <input
+                  type="text"
+                  required
+                  placeholder="e.g. Rohan Sharma"
+                  value={authName}
+                  onChange={(e) => setAuthName(e.target.value)}
+                  className="w-full rounded-xl border border-border-gray px-3.5 py-2.5 text-xs outline-none focus:border-brand-red bg-white font-bold"
+                />
+              </div>
+
+              <div className="space-y-1">
+                <label className="text-[9px] font-black text-zinc-500 uppercase tracking-wider block">
+                  Email Address (Optional)
+                </label>
+                <input
+                  type="email"
+                  placeholder="e.g. rohan@example.com"
+                  value={authEmail}
+                  onChange={(e) => setAuthEmail(e.target.value)}
+                  className="w-full rounded-xl border border-border-gray px-3.5 py-2.5 text-xs outline-none focus:border-brand-red bg-white"
+                />
+              </div>
+
+              <button
+                type="submit"
+                className="w-full rounded-xl bg-brand-red py-3.5 text-xs font-bold text-white hover:bg-red-700 active-scale flex items-center justify-center gap-1"
+              >
+                Next: Complete Address
+                <ArrowRight className="h-4 w-4" />
+              </button>
+            </form>
+          )}
+
+          {authStep === "address" && (
+            <form onSubmit={handleAddressSubmit} className="space-y-3.5">
               <div className="space-y-1">
                 <label className="text-[9px] font-black text-zinc-500 uppercase tracking-wider block">
                   Flat / House No. / Building <span className="text-brand-red">*</span>
@@ -469,9 +717,9 @@ export default function CheckoutPage() {
                   type="text"
                   required
                   placeholder="e.g. Flat 402, Sea Breeze Heights"
-                  value={loginFlat}
-                  onChange={(e) => setLoginFlat(e.target.value)}
-                  className="w-full rounded-xl border border-border-gray px-3.5 py-2.5 text-xs outline-none focus:border-brand-red bg-white"
+                  value={authFlat}
+                  onChange={(e) => setAuthFlat(e.target.value)}
+                  className="w-full rounded-xl border border-border-gray px-3.5 py-2.5 text-xs outline-none focus:border-brand-red bg-white font-bold"
                 />
               </div>
 
@@ -481,9 +729,9 @@ export default function CheckoutPage() {
                     Area Sector <span className="text-brand-red">*</span>
                   </label>
                   <select
-                    value={loginArea}
-                    onChange={(e) => setLoginArea(e.target.value)}
-                    className="w-full rounded-xl border border-border-gray px-3.5 py-2.5 text-xs outline-none focus:border-brand-red bg-white"
+                    value={authArea}
+                    onChange={(e) => setAuthArea(e.target.value)}
+                    className="w-full rounded-xl border border-border-gray px-3.5 py-2.5 text-xs outline-none focus:border-brand-red bg-white font-bold"
                   >
                     <option value="Ulwe Sector 5">Ulwe Sector 5</option>
                     <option value="Ulwe Sector 8">Ulwe Sector 8</option>
@@ -501,21 +749,34 @@ export default function CheckoutPage() {
                     required
                     maxLength={6}
                     placeholder="410206"
-                    value={loginPincode}
-                    onChange={(e) => setLoginPincode(e.target.value)}
-                    className="w-full rounded-xl border border-border-gray px-3.5 py-2.5 text-xs outline-none focus:border-brand-red bg-white"
+                    value={authPincode}
+                    onChange={(e) => setAuthPincode(e.target.value.replace(/\D/g, ""))}
+                    className="w-full rounded-xl border border-border-gray px-3.5 py-2.5 text-xs outline-none focus:border-brand-red bg-white font-bold"
                   />
                 </div>
               </div>
-            </div>
 
-            <button
-              type="submit"
-              className="w-full rounded-xl bg-brand-red py-3.5 text-xs font-bold text-white hover:bg-red-700 active-scale shadow-md mt-2"
-            >
-              Save Details &amp; Continue
-            </button>
-          </form>
+              <div className="space-y-1">
+                <label className="text-[9px] font-black text-zinc-500 uppercase tracking-wider block">
+                  Landmark / Details (Optional)
+                </label>
+                <input
+                  type="text"
+                  placeholder="e.g. Near Sector 17 Circle / Opposite DMart"
+                  value={authLandmark}
+                  onChange={(e) => setAuthLandmark(e.target.value)}
+                  className="w-full rounded-xl border border-border-gray px-3.5 py-2.5 text-xs outline-none focus:border-brand-red bg-white"
+                />
+              </div>
+
+              <button
+                type="submit"
+                className="w-full rounded-xl bg-brand-red py-3.5 text-xs font-bold text-white hover:bg-red-700 active-scale shadow-md"
+              >
+                Register &amp; Proceed to Checkout
+              </button>
+            </form>
+          )}
         </div>
       </div>
     );
@@ -533,7 +794,7 @@ export default function CheckoutPage() {
   }
 
   // Calculate dynamic dates list
-  const isSameDayEnabled = deliverySettings?.sameDayDelivery ?? true;
+  const isSameDayEnabled = deliverySettings?.sameDayDelivery ?? false;
   const availableDates = [
     { label: "Today", value: "Today", dateObj: today, enabled: isSameDayEnabled },
     { label: "Tomorrow", value: "Tomorrow", dateObj: tomorrow, enabled: true },
@@ -568,17 +829,18 @@ export default function CheckoutPage() {
             Select Delivery Address
           </h2>
           <button
-            onClick={() => setIsAddingAddress(!isAddingAddress)}
+            onClick={() => { setIsAddingAddress(!isAddingAddress); setEditingAddressId(null); }}
             className="text-xs font-bold text-brand-red hover:underline"
           >
             {isAddingAddress ? "Cancel" : "+ Add New Address"}
           </button>
         </div>
 
-        {isAddingAddress && (
+        {/* Add Address Form */}
+        {isAddingAddress && !editingAddressId && (
           <form
             onSubmit={handleAddAddress}
-            className="rounded-2xl border border-border-gray bg-white p-4 space-y-3.5 shadow-sm"
+            className="rounded-2xl border border-border-gray bg-white p-4 space-y-3.5 shadow-sm animate-fade-in"
           >
             <h3 className="text-xs font-bold text-foreground">Add New Address</h3>
             
@@ -615,8 +877,16 @@ export default function CheckoutPage() {
                 placeholder="Pincode"
                 maxLength={6}
                 value={newAddress.pincode}
-                onChange={(e) => setNewAddress({ ...newAddress, pincode: e.target.value })}
+                onChange={(e) => setNewAddress({ ...newAddress, pincode: e.target.value.replace(/\D/g, "") })}
                 className="w-full rounded-xl border border-border-gray px-3.5 py-2.5 text-xs outline-none focus:border-brand-red"
+              />
+              <input
+                type="text"
+                required
+                placeholder="Landmark / Directions (Optional)"
+                value={newAddress.landmark}
+                onChange={(e) => setNewAddress({ ...newAddress, landmark: e.target.value })}
+                className="col-span-2 w-full rounded-xl border border-border-gray px-3.5 py-2.5 text-xs outline-none focus:border-brand-red"
               />
               <input
                 type="tel"
@@ -649,12 +919,114 @@ export default function CheckoutPage() {
               type="submit"
               className="w-full rounded-xl bg-brand-red py-3 text-xs font-bold text-white transition-all hover:bg-red-700 active-scale"
             >
-              Save Address & Select
+              Save Address &amp; Select
             </button>
           </form>
         )}
 
+        {/* Edit Address Form */}
+        {editingAddressId && editAddressData && (
+          <form
+            onSubmit={handleSaveEditAddress}
+            className="rounded-2xl border border-brand-red bg-white p-4 space-y-3.5 shadow-sm animate-fade-in"
+          >
+            <h3 className="text-xs font-bold text-brand-red">Edit Address</h3>
+            
+            <div className="grid grid-cols-2 gap-3">
+              <input
+                type="text"
+                required
+                placeholder="Full Name"
+                value={editAddressData.fullName}
+                onChange={(e) => setEditAddressData({ ...editAddressData, fullName: e.target.value })}
+                className="col-span-2 w-full rounded-xl border border-border-gray px-3.5 py-2.5 text-xs outline-none focus:border-brand-red"
+              />
+              <input
+                type="text"
+                required
+                placeholder="Flat / House No. / Building"
+                value={editAddressData.flat}
+                onChange={(e) => setEditAddressData({ ...editAddressData, flat: e.target.value })}
+                className="col-span-2 w-full rounded-xl border border-border-gray px-3.5 py-2.5 text-xs outline-none focus:border-brand-red"
+              />
+              <select
+                value={editAddressData.area}
+                onChange={(e) => setEditAddressData({ ...editAddressData, area: e.target.value })}
+                className="w-full rounded-xl border border-border-gray px-3.5 py-2.5 text-xs outline-none focus:border-brand-red bg-white"
+              >
+                <option value="Ulwe Sector 5">Ulwe Sector 5</option>
+                <option value="Ulwe Sector 8">Ulwe Sector 8</option>
+                <option value="Ulwe Sector 17">Ulwe Sector 17</option>
+                <option value="Ulwe Sector 24">Ulwe Sector 24</option>
+              </select>
+              <input
+                type="text"
+                required
+                placeholder="Pincode"
+                maxLength={6}
+                value={editAddressData.pincode}
+                onChange={(e) => setEditAddressData({ ...editAddressData, pincode: e.target.value.replace(/\D/g, "") })}
+                className="w-full rounded-xl border border-border-gray px-3.5 py-2.5 text-xs outline-none focus:border-brand-red"
+              />
+              <input
+                type="text"
+                placeholder="Landmark / Directions (Optional)"
+                value={editAddressData.landmark || ""}
+                onChange={(e) => setEditAddressData({ ...editAddressData, landmark: e.target.value })}
+                className="col-span-2 w-full rounded-xl border border-border-gray px-3.5 py-2.5 text-xs outline-none focus:border-brand-red"
+              />
+              <input
+                type="tel"
+                required
+                placeholder="Mobile Number"
+                value={editAddressData.phone}
+                onChange={(e) => setEditAddressData({ ...editAddressData, phone: e.target.value })}
+                className="col-span-2 w-full rounded-xl border border-border-gray px-3.5 py-2.5 text-xs outline-none focus:border-brand-red"
+              />
+            </div>
+
+            <div className="flex gap-2">
+              {["Home", "Office", "Other"].map((tag) => (
+                <button
+                  key={tag}
+                  type="button"
+                  onClick={() => setEditAddressData({ ...editAddressData, tag })}
+                  className={`rounded-lg px-4 py-1.5 text-xs font-bold border transition-all ${
+                    editAddressData.tag === tag
+                      ? "bg-foreground text-white border-foreground"
+                      : "bg-white text-zinc-500 border-border-gray"
+                  }`}
+                >
+                  {tag}
+                </button>
+              ))}
+            </div>
+
+            <div className="flex gap-2">
+              <button
+                type="button"
+                onClick={() => { setEditingAddressId(null); setEditAddressData(null); }}
+                className="flex-1 rounded-xl border border-border-gray py-2.5 text-xs font-bold text-zinc-500"
+              >
+                Cancel
+              </button>
+              <button
+                type="submit"
+                className="flex-1 rounded-xl bg-brand-red py-2.5 text-xs font-bold text-white hover:bg-red-700"
+              >
+                Save Changes
+              </button>
+            </div>
+          </form>
+        )}
+
         <div className="space-y-2.5">
+          {localAddresses.length === 0 && (
+            <div className="rounded-2xl border border-dashed border-border-gray bg-white p-6 text-center text-zinc-400 text-xs font-medium">
+              No saved addresses found. Please add a new address to proceed.
+            </div>
+          )}
+
           {localAddresses.map((addr) => {
             const isSelected = selectedAddressId === addr.id;
             return (
@@ -667,15 +1039,51 @@ export default function CheckoutPage() {
               >
                 <MapPin className={`h-4.5 w-4.5 shrink-0 mt-0.5 ${isSelected ? "text-brand-red" : "text-zinc-400"}`} />
                 <div className="flex-1 min-w-0">
-                  <div className="flex items-center gap-2">
-                    <span className="text-xs font-bold text-foreground">{addr.fullName}</span>
-                    <span className="rounded bg-light-gray border border-border-gray/30 px-1.5 py-0.5 text-[9px] font-bold text-zinc-500">
-                      {addr.tag}
-                    </span>
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-2">
+                      <span className="text-xs font-bold text-foreground">{addr.fullName}</span>
+                      <span className="rounded bg-light-gray border border-border-gray/30 px-1.5 py-0.5 text-[9px] font-bold text-zinc-500">
+                        {addr.tag}
+                      </span>
+                      {addr.isDefault && (
+                        <span className="rounded bg-emerald-50 border border-emerald-100 px-1.5 py-0.5 text-[9px] font-bold text-emerald-700">
+                          Default
+                        </span>
+                      )}
+                    </div>
+                    
+                    {/* Edit/Delete Actions */}
+                    <div className="flex items-center gap-1.5">
+                      {!addr.isDefault && (
+                        <button
+                          onClick={(e) => handleSetDefaultAddress(addr.id, e)}
+                          className="text-[9px] font-bold text-emerald-600 hover:underline px-1 py-0.5 rounded"
+                        >
+                          Make Default
+                        </button>
+                      )}
+                      <button
+                        onClick={(e) => handleEditAddressStart(addr, e)}
+                        className="text-zinc-400 hover:text-zinc-600 p-1 active-scale"
+                      >
+                        <Edit2 className="h-3.5 w-3.5" />
+                      </button>
+                      <button
+                        onClick={(e) => handleDeleteAddress(addr.id, e)}
+                        className="text-brand-red hover:text-red-700 p-1 active-scale"
+                      >
+                        <Trash2 className="h-3.5 w-3.5" />
+                      </button>
+                    </div>
                   </div>
                   <p className="mt-1 text-[11px] leading-relaxed text-zinc-500">
                     {addr.flat}, {addr.area}, {addr.city} - {addr.pincode}
                   </p>
+                  {addr.landmark && (
+                    <p className="text-[10px] text-zinc-400 mt-0.5 font-medium">
+                      Landmark: {addr.landmark}
+                    </p>
+                  )}
                   <p className="mt-0.5 text-[11px] text-zinc-400 font-semibold">
                     Phone: {addr.phone}
                   </p>
@@ -689,7 +1097,7 @@ export default function CheckoutPage() {
       {/* 2. Delivery Date & Slots */}
       <div className="rounded-2xl border border-border-gray bg-white p-4 space-y-4 shadow-sm">
         <h2 className="text-xs font-bold uppercase tracking-wider text-zinc-400">
-          Delivery Date & Slot
+          Delivery Date &amp; Slot
         </h2>
         
         {/* Date Selector */}
@@ -732,12 +1140,15 @@ export default function CheckoutPage() {
           </div>
 
           {sameDayAlert && (
-            <div className="rounded-xl border border-red-200 bg-red-50 p-3.5 text-xs text-brand-red font-bold flex items-start gap-2.5 animate-fade-in">
-              <AlertTriangle className="h-4.5 w-4.5 shrink-0 mt-0.5" />
+            <div className="rounded-xl border border-red-200 bg-red-50 p-4 text-xs text-brand-red font-bold flex items-start gap-2.5 animate-fade-in">
+              <AlertTriangle className="h-5 w-5 shrink-0 mt-0.5" />
               <div>
-                <p>Same Day Delivery Currently Unavailable.</p>
-                <p className="text-[10px] text-zinc-500 font-medium mt-0.5">
-                  Please contact NONZO Support: <a href="tel:7788996549" className="text-brand-red font-black underline">7788996549</a>
+                <p className="font-extrabold text-brand-red">Same-day delivery is currently unavailable.</p>
+                <p className="mt-1 text-[10px] text-zinc-500 font-semibold leading-relaxed">
+                  Please select tomorrow or a future delivery date.
+                </p>
+                <p className="text-[10px] text-zinc-500 font-semibold mt-1">
+                  For urgent orders contact: <a href="tel:7788996549" className="text-brand-red font-black underline">7788996549</a>
                 </p>
               </div>
             </div>
@@ -777,9 +1188,9 @@ export default function CheckoutPage() {
         </div>
       </div>
 
-      {/* 3. Checkout Confidence Block — summary before payment */}
+      {/* 3. Checkout Confidence Block */}
       {selectedAddressId && (
-        <div className="rounded-2xl border border-emerald-100 bg-emerald-50/60 p-4 space-y-3">
+        <div className="rounded-2xl border border-emerald-100 bg-emerald-50/60 p-4 space-y-3 animate-fade-in">
           <h2 className="text-xs font-bold uppercase tracking-wider text-emerald-700 flex items-center gap-1.5">
             <CheckCircle2 className="h-4 w-4" />
             Delivering To
@@ -808,7 +1219,6 @@ export default function CheckoutPage() {
       )}
 
       {/* 4. Payment Method UI */}
-
       <div className="rounded-2xl border border-border-gray bg-white p-4 space-y-3.5 shadow-sm">
         <h2 className="text-xs font-bold uppercase tracking-wider text-zinc-400">
           Payment Method
@@ -873,7 +1283,7 @@ export default function CheckoutPage() {
         )}
       </div>
 
-      {/* 4. Order Summary */}
+      {/* 5. Order Summary — cleaning fee omitted */}
       <div className="rounded-2xl border border-border-gray bg-white p-4 space-y-3 shadow-sm">
         <h2 className="text-xs font-bold uppercase tracking-wider text-zinc-400">
           Order Summary
@@ -885,23 +1295,31 @@ export default function CheckoutPage() {
               ((item.originalPrice - item.price) / item.originalPrice) * 100
             );
             return (
-              <div key={item.id} className="flex justify-between items-start gap-2 text-xs">
-                <div>
-                  <span className="font-extrabold text-foreground">{item.name}</span>
-                  <span className="text-[10px] text-zinc-400 block mt-0.5">
-                    {item.weight} • {item.cutName} x {item.quantity}
-                  </span>
-                </div>
-                <div className="text-right">
-                  <span className="font-bold text-foreground">
-                    ₹{item.price * item.quantity}
-                  </span>
-                  {itemDiscountPct > 0 && (
-                    <span className="block text-[9px] font-extrabold text-brand-red mt-0.5">
-                      ({itemDiscountPct}% OFF)
+              <div key={item.id} className="flex flex-col text-xs border-b border-zinc-50 pb-2.5 last:border-b-0 last:pb-0">
+                <div className="flex justify-between items-start gap-2">
+                  <div>
+                    <span className="font-extrabold text-foreground">{item.name}</span>
+                    <span className="text-[10px] text-zinc-400 block mt-0.5">
+                      {item.weight} &bull; {item.cutName} x {item.quantity}
                     </span>
-                  )}
+                  </div>
+                  <div className="text-right">
+                    <span className="font-bold text-foreground">
+                      ₹{item.price * item.quantity}
+                    </span>
+                    {itemDiscountPct > 0 && (
+                      <span className="block text-[9px] font-extrabold text-brand-red mt-0.5">
+                        ({itemDiscountPct}% OFF)
+                      </span>
+                    )}
+                  </div>
                 </div>
+                {item.specialInstructions && item._cutType?.id === "special-cut" && (
+                  <div className="mt-1 text-[10px] text-zinc-600 bg-zinc-50 border border-zinc-100 rounded-lg p-2 italic">
+                    <strong className="text-[8px] uppercase font-extrabold text-zinc-400 block tracking-wider not-italic mb-0.5">Cut Request Note:</strong>
+                    &quot;{item.specialInstructions}&quot;
+                  </div>
+                )}
               </div>
             );
           })}
@@ -909,14 +1327,8 @@ export default function CheckoutPage() {
 
         <div className="border-t border-border-gray/50 pt-3 space-y-2">
           <div className="flex justify-between text-xs text-zinc-500">
-            <span>Subtotal</span>
+            <span>Product Total</span>
             <span className="font-bold text-foreground">₹{subtotal}</span>
-          </div>
-          <div className="flex justify-between text-xs text-zinc-500">
-            <span>Cleaning & Handling</span>
-            <span className={`font-bold ${cleaningFee === 0 ? "text-emerald-600" : "text-foreground"}`}>
-              {cleaningFee > 0 ? `₹${cleaningFee}` : "FREE"}
-            </span>
           </div>
           <div className="flex justify-between text-xs text-zinc-500">
             <span>Delivery Fee</span>
@@ -937,14 +1349,14 @@ export default function CheckoutPage() {
             </div>
           )}
           <div className="border-t border-border-gray pt-2.5 flex justify-between text-sm font-black text-foreground">
-            <span>Total</span>
+            <span>Grand Total</span>
             <span>₹{finalTotal}</span>
           </div>
         </div>
       </div>
 
-      {/* Bottom Sticky Place Order */}
-      <div className="fixed bottom-[57px] left-0 right-0 z-45 border-t border-border-gray bg-white py-3.5 px-4 shadow-[0_-8px_24px_rgba(0,0,0,0.06)] md:relative md:bottom-auto md:border-t-0 md:shadow-none md:p-0 md:bg-transparent safe-bottom">
+      {/* Bottom Sticky Place Order — styled consistently */}
+      <div className="fixed bottom-[57px] left-0 right-0 z-45 border-t border-border-gray bg-white py-3.5 px-4 shadow-[0_-8px_24px_rgba(0,0,0,0.06)] md:relative md:bottom-auto md:border-t-0 md:shadow-none md:p-0 md:bg-transparent safe-bottom animate-fade-in">
         <div className="mx-auto flex max-w-7xl items-center justify-between gap-4">
           <div className="hidden md:block">
             <span className="text-[10px] text-zinc-400 block font-semibold">Grand Total</span>
@@ -953,7 +1365,9 @@ export default function CheckoutPage() {
 
           <button
             onClick={handlePlaceOrder}
-            className="flex w-full items-center justify-between rounded-2xl bg-brand-red px-5 py-4 shadow-[0_4px_20px_rgba(200,16,46,0.3)] transition-all active-scale hover:bg-red-700 md:w-auto md:min-w-[320px]"
+            disabled={localAddresses.length === 0}
+            className="w-full flex items-center justify-between rounded-2xl bg-brand-red px-6 py-4 shadow-[0_4px_20px_rgba(200,16,46,0.3)] transition-all hover:bg-red-700 active-scale text-white md:w-auto md:min-w-[320px] disabled:bg-zinc-200 disabled:text-zinc-400 disabled:shadow-none disabled:cursor-not-allowed"
+            style={{ height: "56px" }}
           >
             <div className="text-left">
               <span className="text-[10px] uppercase font-extrabold tracking-widest text-white/75 block">Place Order</span>

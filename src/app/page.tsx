@@ -307,8 +307,7 @@ export default function HomePage() {
               <button
                 key={cat.id}
                 onClick={() => handleCategoryClick(cat.name)}
-                style={{ minWidth: "120px" }}
-                className={`group relative flex shrink-0 snap-start flex-col overflow-hidden rounded-2xl border transition-all duration-300 active-scale md:min-w-0 ${
+                className={`group relative flex shrink-0 snap-start flex-col overflow-hidden rounded-2xl border transition-all duration-300 active-scale w-[calc((100vw-60px)/3.5)] min-w-[calc((100vw-60px)/3.5)] md:w-auto md:min-w-0 ${
                   isSelected
                     ? "border-brand-red shadow-lg shadow-brand-red/10 ring-2 ring-brand-red/20"
                     : "border-zinc-200 hover:border-brand-red/30 hover:shadow-md hover:shadow-zinc-200/80"

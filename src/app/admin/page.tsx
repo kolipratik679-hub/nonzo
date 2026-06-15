@@ -77,14 +77,14 @@ export default function AdminDashboard() {
   const fileInputRef = useRef<HTMLInputElement>(null);
   const { products, cutTypes, updateProducts, updateCutTypes, updateDeliverySettings } = useCart();
   
-  // Tabs: 'delivery' | 'banners' | 'cuts' | 'products'
-  const [activeTab, setActiveTab] = useState<"delivery" | "banners" | "cuts" | "products">("delivery");
+  // Tabs: 'delivery' | 'banners' | 'cuts' | 'products' | 'orders'
+  const [activeTab, setActiveTab] = useState<"delivery" | "banners" | "cuts" | "products" | "orders">("delivery");
   const [notification, setNotification] = useState<string | null>(null);
 
   // 1. Delivery slot states
-  const [sameDayDelivery, setSameDayDelivery] = useState<boolean>(true);
+  const [sameDayDelivery, setSameDayDelivery] = useState<boolean>(false);
   const [slots, setSlots] = useState<SlotSetting[]>([]);
-  const [freeDeliveryThreshold, setFreeDeliveryThreshold] = useState<number>(499);
+  const [freeDeliveryThreshold, setFreeDeliveryThreshold] = useState<number>(699);
   const [deliveryCharge, setDeliveryCharge] = useState<number>(39);
 
   // 2. Banner states
@@ -121,6 +121,9 @@ export default function AdminDashboard() {
   const [selectedProductId, setSelectedProductId] = useState<string>("");
   const [newGalleryImgUrl, setNewGalleryImgUrl] = useState("");
 
+  // 5. Placed orders state
+  const [placedOrders, setPlacedOrders] = useState<any[]>([]);
+
   // Set default product ID once products are loaded
   useEffect(() => {
     if (products && products.length > 0 && !selectedProductId) {
@@ -137,9 +140,9 @@ export default function AdminDashboard() {
     if (savedDelivery) {
       try {
         const parsed = JSON.parse(savedDelivery);
-        setSameDayDelivery(parsed.sameDayDelivery ?? true);
+        setSameDayDelivery(parsed.sameDayDelivery ?? false);
         setSlots(parsed.slots || []);
-        setFreeDeliveryThreshold(parsed.freeDeliveryThreshold ?? 499);
+        setFreeDeliveryThreshold(parsed.freeDeliveryThreshold ?? 699);
         setDeliveryCharge(parsed.deliveryCharge ?? 39);
       } catch (e) {
         console.error(e);
@@ -152,12 +155,22 @@ export default function AdminDashboard() {
         { id: "slot-3", time: "5 PM – 9 PM", enabled: true, maxOrders: 15 },
       ];
       setSlots(defaultSlots);
-      setFreeDeliveryThreshold(499);
+      setFreeDeliveryThreshold(699);
       setDeliveryCharge(39);
       localStorage.setItem(
         "nonzo_delivery_settings",
-        JSON.stringify({ sameDayDelivery: true, slots: defaultSlots, freeDeliveryThreshold: 499, deliveryCharge: 39 })
+        JSON.stringify({ sameDayDelivery: false, slots: defaultSlots, freeDeliveryThreshold: 699, deliveryCharge: 39 })
       );
+    }
+
+    // Load placed orders
+    const savedOrders = localStorage.getItem("nonzo_placed_orders");
+    if (savedOrders) {
+      try {
+        setPlacedOrders(JSON.parse(savedOrders));
+      } catch (e) {
+        console.error("Failed to parse orders on mount", e);
+      }
     }
 
     // Load banners
@@ -569,6 +582,17 @@ export default function AdminDashboard() {
         >
           <ImageIcon className="h-4 w-4" />
           Product Gallery Admin
+        </button>
+        <button
+          onClick={() => setActiveTab("orders")}
+          className={`flex items-center gap-1.5 px-4 py-2.5 text-xs font-bold transition-all border-b-2 uppercase tracking-wide shrink-0 ${
+            activeTab === "orders"
+              ? "border-brand-red text-brand-red font-black"
+              : "border-transparent text-zinc-400 hover:text-zinc-600"
+          }`}
+        >
+          <Clock className="h-4 w-4" />
+          Customer Orders
         </button>
       </div>
 
@@ -1449,6 +1473,94 @@ export default function AdminDashboard() {
               </div>
             </div>
           )}
+        </div>
+      )}
+
+      {activeTab === "orders" && (
+        <div className="space-y-5 animate-fade-in">
+          <div className="rounded-2xl border border-border-gray bg-white p-5 space-y-4 shadow-sm">
+            <div className="flex justify-between items-center pb-2.5 border-b border-zinc-100">
+              <h3 className="text-xs font-black uppercase tracking-wider text-zinc-400">
+                Customer Placed Orders ({placedOrders.length})
+              </h3>
+              <button
+                onClick={() => {
+                  if (confirm("Are you sure you want to clear all system orders?")) {
+                    localStorage.removeItem("nonzo_placed_orders");
+                    setPlacedOrders([]);
+                    triggerNotification("All orders cleared from system.");
+                  }
+                }}
+                className="text-[10px] font-bold text-brand-red border border-red-200 rounded-lg px-2.5 py-1 hover:bg-red-50"
+              >
+                Clear All Orders
+              </button>
+            </div>
+
+            {placedOrders.length === 0 ? (
+              <p className="text-xs text-zinc-400 py-8 text-center font-medium">
+                No orders have been placed on the system yet.
+              </p>
+            ) : (
+              <div className="space-y-4">
+                {placedOrders.map((ord: any) => (
+                  <div
+                    key={ord.id}
+                    className="border border-border-gray rounded-2xl p-4 space-y-3 bg-zinc-50/20"
+                  >
+                    <div className="flex flex-wrap justify-between items-start border-b border-border-gray pb-2 gap-2 text-xs">
+                      <div>
+                        <span className="font-extrabold text-foreground block">Order ID: {ord.id}</span>
+                        <span className="text-[10px] text-zinc-400 block mt-0.5 font-medium">{ord.date}</span>
+                      </div>
+                      <div className="text-right">
+                        <span className="rounded-full bg-blue-50 border border-blue-100 text-blue-800 text-[9px] font-black px-2.5 py-0.5 uppercase block w-fit ml-auto">
+                          {ord.status}
+                        </span>
+                        {ord.userName && (
+                          <span className="text-[10px] text-zinc-500 font-bold block mt-1">
+                            Customer: {ord.userName} ({ord.userMobile})
+                          </span>
+                        )}
+                      </div>
+                    </div>
+
+                    {/* Items */}
+                    <div className="space-y-2">
+                      {ord.items.map((item: any, idx: number) => (
+                        <div key={idx} className="flex flex-col text-xs bg-white border border-border-gray/40 rounded-xl p-2.5">
+                          <div className="flex justify-between font-bold">
+                            <span className="text-foreground">{item.name}</span>
+                            <span className="text-foreground">₹{item.price * item.quantity}</span>
+                          </div>
+                          <div className="text-[10px] text-zinc-400 font-semibold mt-0.5">
+                            Portion: {item.weight} &bull; Cut: {item.cut} x {item.quantity}
+                          </div>
+                          {item.specialInstructions && item.cut === "Special Cut" && (
+                            <div className="mt-1.5 text-[10px] text-zinc-600 bg-red-50/40 border border-red-100/50 rounded-lg p-2 font-medium italic">
+                              <strong className="text-[8px] uppercase font-extrabold text-brand-red block tracking-wider not-italic mb-0.5">Cut Request Notes:</strong>
+                              &quot;{item.specialInstructions}&quot;
+                            </div>
+                          )}
+                        </div>
+                      ))}
+                    </div>
+
+                    <div className="flex flex-wrap justify-between items-center text-xs pt-2 border-t border-border-gray/30 gap-2">
+                      <div>
+                        <span className="text-zinc-400 font-semibold block text-[9px] uppercase">Destination</span>
+                        <span className="font-bold text-zinc-600">{ord.deliveryAddress}</span>
+                      </div>
+                      <div className="text-right">
+                        <span className="text-zinc-400 font-semibold block text-[9px] uppercase">Charged Total</span>
+                        <span className="font-black text-foreground">₹{ord.total}</span>
+                      </div>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
         </div>
       )}
     </div>

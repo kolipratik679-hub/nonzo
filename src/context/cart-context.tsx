@@ -119,13 +119,13 @@ export function CartProvider({ children }: { children: React.ReactNode }) {
   const [promoError, setPromoError] = useState<string>("");
 
   const [deliverySettings, setDeliverySettings] = useState({
-    sameDayDelivery: true,
+    sameDayDelivery: false,
     slots: [
       { id: "slot-1", time: "8 AM – 10 AM", enabled: true, maxOrders: 15 },
       { id: "slot-2", time: "10 AM – 12 PM", enabled: true, maxOrders: 15 },
       { id: "slot-3", time: "5 PM – 9 PM", enabled: true, maxOrders: 15 }
     ],
-    freeDeliveryThreshold: 499,
+    freeDeliveryThreshold: 699,
     deliveryCharge: 39
   });
 
@@ -184,24 +184,24 @@ export function CartProvider({ children }: { children: React.ReactNode }) {
       if (savedDelivery) {
         const parsed = JSON.parse(savedDelivery);
         setDeliverySettings({
-          sameDayDelivery: parsed.sameDayDelivery ?? true,
+          sameDayDelivery: parsed.sameDayDelivery ?? false,
           slots: parsed.slots ?? [
             { id: "slot-1", time: "8 AM – 10 AM", enabled: true, maxOrders: 15 },
             { id: "slot-2", time: "10 AM – 12 PM", enabled: true, maxOrders: 15 },
             { id: "slot-3", time: "5 PM – 9 PM", enabled: true, maxOrders: 15 }
           ],
-          freeDeliveryThreshold: parsed.freeDeliveryThreshold ?? 499,
+          freeDeliveryThreshold: parsed.freeDeliveryThreshold ?? 699,
           deliveryCharge: parsed.deliveryCharge ?? 39
         });
       } else {
         localStorage.setItem("nonzo_delivery_settings", JSON.stringify({
-          sameDayDelivery: true,
+          sameDayDelivery: false,
           slots: [
             { id: "slot-1", time: "8 AM – 10 AM", enabled: true, maxOrders: 15 },
             { id: "slot-2", time: "10 AM – 12 PM", enabled: true, maxOrders: 15 },
             { id: "slot-3", time: "5 PM – 9 PM", enabled: true, maxOrders: 15 }
           ],
-          freeDeliveryThreshold: 499,
+          freeDeliveryThreshold: 699,
           deliveryCharge: 39
         }));
       }
@@ -400,8 +400,8 @@ export function CartProvider({ children }: { children: React.ReactNode }) {
     0
   );
 
-  // Cleaning fee: ₹30 flat, waived for orders > ₹999
-  const cleaningFee = subtotal === 0 ? 0 : subtotal >= 999 ? 0 : 30;
+  // Cleaning fee is completely removed
+  const cleaningFee = 0;
 
   // Delivery fee: free above freeDeliveryThreshold or FREESHIP code
   const isFreeDelivery = subtotal >= deliverySettings.freeDeliveryThreshold || promoCode === "FREESHIP";
@@ -419,7 +419,7 @@ export function CartProvider({ children }: { children: React.ReactNode }) {
 
   const finalTotal = Math.max(
     0,
-    subtotal + cleaningFee + deliveryFee - promoDiscount
+    subtotal + deliveryFee - promoDiscount
   );
 
   return (
