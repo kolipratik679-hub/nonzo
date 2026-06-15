@@ -429,7 +429,7 @@ export default function CheckoutPage() {
         currency: rzpOrder.currency,
         name: "NONZO Seafoods",
         description: "Secure Order Payment",
-        image: "/NONZO-LOGO.png",
+        image: "https://nonzo.vercel.app/NONZO-LOGO.png",
         order_id: rzpOrder.id,
         handler: async function (response: any) {
           setPaymentStatusText("Verifying payment transaction signature...");

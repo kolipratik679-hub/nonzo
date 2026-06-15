@@ -80,6 +80,7 @@ interface CartContextType {
   updateQuantity: (cartItemId: string, quantity: number) => void;
   updateCartItemWeight: (cartItemId: string, weight: string) => void;
   updateCartItemCut: (cartItemId: string, cutId: string) => void;
+  updateCartItemSpecialInstructions: (cartItemId: string, instructions: string) => void;
   clearCart: () => void;
   // Computed totals
   subtotal: number;
@@ -365,6 +366,14 @@ export function CartProvider({ children }: { children: React.ReactNode }) {
     saveCart(newCart);
   };
 
+  const updateCartItemSpecialInstructions = (cartItemId: string, instructions: string) => {
+    saveCart(
+      cart.map((item) =>
+        item.id === cartItemId ? { ...item, specialInstructions: instructions } : item
+      )
+    );
+  };
+
   const clearCart = () => {
     saveCart([]);
     setPromoCode(null);
@@ -435,6 +444,7 @@ export function CartProvider({ children }: { children: React.ReactNode }) {
         updateQuantity,
         updateCartItemWeight,
         updateCartItemCut,
+        updateCartItemSpecialInstructions,
         clearCart,
         subtotal,
         cleaningFee,

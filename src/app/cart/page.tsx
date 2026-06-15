@@ -44,6 +44,7 @@ export default function CartPage() {
     promoError,
     updateCartItemWeight,
     updateCartItemCut,
+    updateCartItemSpecialInstructions,
     cutTypes,
     deliverySettings,
   } = useCart();
@@ -320,13 +321,6 @@ export default function CartPage() {
                     </span>
                   </div>
 
-                  {/* Special Cut instructions display */}
-                  {item.specialInstructions && item._cutType?.id === "special-cut" && (
-                    <div className="mt-2 text-[10px] text-zinc-600 bg-zinc-50 border border-zinc-100 rounded-lg p-2.5">
-                      <strong className="text-[8px] uppercase font-extrabold text-zinc-400 block tracking-wider">Cut Request Notes:</strong>
-                      <p className="mt-0.5 italic leading-relaxed">{item.specialInstructions}</p>
-                    </div>
-                  )}
 
                   <div className="mt-3 flex items-center justify-between">
                     <div>
@@ -376,38 +370,38 @@ export default function CartPage() {
               {allowedCutObjects.length > 0 && (
                 <div className="space-y-1.5">
                   <span className="text-[9px] font-bold text-zinc-400 uppercase tracking-wide">Select Cut Type</span>
-                  <div className="flex gap-2 overflow-x-auto pb-1 no-scrollbar">
+                  <div className="flex gap-1.5 overflow-x-auto pb-1 no-scrollbar">
                     {allowedCutObjects.map((cut) => {
                       const isActive = currentCutId === cut.id;
                       return (
                         <button
                           key={cut.id}
                           onClick={() => updateCartItemCut(item.id, cut.id)}
-                          className={`flex shrink-0 flex-col items-center gap-1 rounded-xl border p-2 transition-all active-scale ${
+                          className={`flex shrink-0 flex-col items-center gap-0.5 rounded-xl border p-1.5 transition-all active-scale ${
                             isActive
                               ? "border-brand-red bg-brand-red/5 text-brand-red"
                               : "border-border-gray bg-white text-zinc-500 hover:border-zinc-300"
                           }`}
-                          style={{ minWidth: "75px" }}
+                          style={{ minWidth: "62px" }}
                         >
-                          <div className={`relative h-10 w-10 overflow-hidden rounded-lg border bg-white p-0.5 ${
+                          <div className={`relative h-8 w-8 overflow-hidden rounded-lg border bg-white p-0.5 ${
                             isActive ? "border-brand-red" : "border-border-gray"
                           }`}>
                             <Image
                               src={cut.image}
                               alt={cut.name}
                               fill
-                              sizes="40px"
+                              sizes="32px"
                               className="object-cover"
                             />
                           </div>
-                          <span className={`text-[8px] font-bold leading-tight text-center ${isActive ? "text-brand-red" : "text-zinc-600"}`}>
+                          <span className={`text-[7.5px] font-bold leading-tight text-center ${isActive ? "text-brand-red" : "text-zinc-600"}`}>
                             {cut.name}
                           </span>
-                          <span className={`text-[8px] font-extrabold rounded-full px-1.5 py-0.5 ${
+                          <span className={`text-[7.5px] font-extrabold rounded-full px-1 py-0.5 ${
                             cut.extraCharge > 0
                               ? "bg-amber-50 text-amber-700"
-                              : "bg-zinc-100 text-zinc-50"
+                              : "bg-zinc-100 text-zinc-500"
                           }`}>
                             {cut.extraCharge === 0 ? "Free" : `+₹${cut.extraCharge}`}
                           </span>
@@ -415,6 +409,28 @@ export default function CartPage() {
                       );
                     })}
                   </div>
+
+                  {/* FIX #1: Special Cut instructions textarea — shown & editable in cart */}
+                  {currentCutId === "special-cut" && (
+                    <div className="mt-2 space-y-1.5 animate-fade-in">
+                      <label className="text-[9px] font-bold uppercase tracking-wide text-zinc-400 block">
+                        Describe your cut preference
+                      </label>
+                      <textarea
+                        rows={3}
+                        maxLength={200}
+                        value={item.specialInstructions || ""}
+                        onChange={(e) =>
+                          updateCartItemSpecialInstructions(item.id, e.target.value.slice(0, 200))
+                        }
+                        placeholder={"Thin slices for fry\nMedium curry pieces\nKeep head attached\nRemove skin"}
+                        className="w-full rounded-xl border border-border-gray bg-white p-3 text-xs outline-none focus:border-brand-red focus:ring-1 focus:ring-brand-red resize-none"
+                      />
+                      <div className="text-right text-[9px] text-zinc-400 font-semibold">
+                        {(item.specialInstructions || "").length}/200 characters
+                      </div>
+                    </div>
+                  )}
                 </div>
               )}
             </div>

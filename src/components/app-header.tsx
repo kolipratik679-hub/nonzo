@@ -60,14 +60,16 @@ export function AppHeader() {
         {/* ── Brand Logo ── */}
         <div className="flex items-center gap-3 md:gap-4 min-w-0">
           <Link href="/" className="flex shrink-0 items-center active-scale">
-            <Image
-              src="/NONZO-LOGO.png"
-              alt="NONZO Logo"
-              width={120}
-              height={80}
-              className="h-9 w-auto object-contain md:h-10"
-              priority
-            />
+            <span className="flex items-center justify-center rounded-lg bg-black p-0.5">
+              <Image
+                src="/NONZO-LOGO.png"
+                alt="NONZO Logo"
+                width={120}
+                height={80}
+                className="h-9 w-auto object-contain md:h-10"
+                priority
+              />
+            </span>
           </Link>
 
           {/* ── Location Selector (Desktop) ── */}
