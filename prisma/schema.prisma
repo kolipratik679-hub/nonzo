@@ -1,0 +1,551 @@
+datasource db {
+  provider = "mysql"
+}
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+model User {
+  id        String    @id @default(cuid())
+  mobile    String    @unique @db.VarChar(10)
+  name      String    @db.VarChar(100)
+  email     String?   @db.VarChar(255)
+  avatarUrl String?   @db.VarChar(500)
+  isBlocked Boolean   @default(false)
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+
+  addresses  Address[]
+  sessions   Session[]
+  cart       Cart?
+  orders     Order[]
+  wishlist   Wishlist?
+  reviews    ProductReview[]
+  activities UserActivity[]
+}
+
+model OtpVerification {
+  id        String   @id @default(cuid())
+  mobile    String   @db.VarChar(10)
+  otp       String   @db.VarChar(6)
+  expiresAt DateTime
+  verified  Boolean  @default(false)
+  attempts  Int      @default(0)
+  createdAt DateTime @default(now())
+
+  @@index([mobile])
+}
+
+model Session {
+  id         String   @id @default(cuid())
+  userId     String
+  user       User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  deviceInfo String?  @db.VarChar(500)
+  expiresAt  DateTime
+  createdAt  DateTime @default(now())
+}
+
+model Category {
+  id          String   @id @db.VarChar(50)
+  name        String   @db.VarChar(100)
+  iconName    String   @db.VarChar(50)
+  image       String   @db.VarChar(500)
+  description String?  @db.VarChar(500)
+  sortOrder   Int      @default(0)
+  isActive    Boolean  @default(true)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  products Product[]
+}
+
+enum StockStatus {
+  IN_STOCK
+  LOW_STOCK
+  OUT_OF_STOCK
+}
+
+model Product {
+  id              String           @id @db.VarChar(100)
+  name            String           @db.VarChar(200)
+  tagline         String?          @db.VarChar(300)
+  categoryId      String           @db.VarChar(50)
+  category        Category         @relation(fields: [categoryId], references: [id])
+  mainImage       String           @db.VarChar(500)
+  description     String           @db.Text
+  freshnessInfo   String?          @db.Text
+  stockStatus     StockStatus      @default(IN_STOCK)
+  averageRating   Float            @default(0.0)
+  reviewCount     Int              @default(0)
+  isActive        Boolean          @default(true)
+  isFeatured      Boolean          @default(false)
+  sortOrder       Int              @default(0)
+  metaTitle       String?          @db.VarChar(200)
+  metaDescription String?          @db.VarChar(500)
+  createdAt       DateTime         @default(now())
+  updatedAt       DateTime         @updatedAt
+
+  images           ProductImage[]
+  weightOptions    WeightOption[]
+  allowedCuts      ProductCutType[]
+  cartItems        CartItem[]
+  wishlistItems    WishlistItem[]
+  reviews          ProductReview[]
+  inventoryBatches InventoryBatch[]
+}
+
+model ProductImage {
+  id        String   @id @default(cuid())
+  productId String   @db.VarChar(100)
+  product   Product  @relation(fields: [productId], references: [id], onDelete: Cascade)
+  imageUrl  String   @db.VarChar(500)
+  sortOrder Int      @default(0)
+  createdAt DateTime @default(now())
+}
+
+model WeightOption {
+  id            String   @id @default(cuid())
+  productId     String   @db.VarChar(100)
+  product       Product  @relation(fields: [productId], references: [id], onDelete: Cascade)
+  weight        String   @db.VarChar(20)
+  weightInGrams Int
+  price         Int
+  originalPrice Int
+  sortOrder     Int      @default(0)
+
+  cartItems        CartItem[]
+  inventoryBatches InventoryBatch[]
+}
+
+model CutType {
+  id          String   @id @db.VarChar(50)
+  name        String   @db.VarChar(100)
+  description String?  @db.VarChar(500)
+  extraCharge Int      @default(0)
+  image       String   @db.VarChar(500)
+  status      String   @default("active")
+  isDeletable Boolean  @default(true)
+  sortOrder   Int      @default(0)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  products  ProductCutType[]
+  cartItems CartItem[]
+}
+
+model ProductCutType {
+  productId String  @db.VarChar(100)
+  product   Product @relation(fields: [productId], references: [id], onDelete: Cascade)
+  cutTypeId String  @db.VarChar(50)
+  cutType   CutType @relation(fields: [cutTypeId], references: [id], onDelete: Cascade)
+
+  @@id([productId, cutTypeId])
+}
+
+model Cart {
+  id        String     @id @default(cuid())
+  userId    String     @unique
+  user      User       @relation(fields: [userId], references: [id], onDelete: Cascade)
+  createdAt DateTime   @default(now())
+  updatedAt DateTime   @updatedAt
+
+  items CartItem[]
+}
+
+model CartItem {
+  id                  String       @id @default(cuid())
+  cartId              String
+  cart                Cart         @relation(fields: [cartId], references: [id], onDelete: Cascade)
+  productId           String       @db.VarChar(100)
+  product             Product      @relation(fields: [productId], references: [id])
+  weightOptionId      String
+  weightOption        WeightOption @relation(fields: [weightOptionId], references: [id])
+  cutTypeId           String       @db.VarChar(50)
+  cutType             CutType      @relation(fields: [cutTypeId], references: [id])
+  quantity            Int
+  specialInstructions String?      @db.VarChar(200)
+  unitPrice           Int
+  unitOriginalPrice   Int
+  createdAt           DateTime     @default(now())
+  updatedAt           DateTime     @updatedAt
+
+  @@unique([cartId, productId, weightOptionId, cutTypeId])
+}
+
+model Address {
+  id                String   @id @default(cuid())
+  userId            String
+  user              User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  tag               String   @default("Home") @db.VarChar(50)
+  fullName          String   @db.VarChar(100)
+  flat              String   @db.VarChar(300)
+  area              String   @db.VarChar(100)
+  city              String   @default("Navi Mumbai") @db.VarChar(100)
+  state             String   @default("Maharashtra") @db.VarChar(100)
+  pincode           String   @default("410206") @db.VarChar(6)
+  phone             String   @db.VarChar(10)
+  landmark          String?  @db.VarChar(300)
+  latitude          Float?
+  longitude         Float?
+  isCurrentLocation Boolean  @default(false)
+  isDefault         Boolean  @default(false)
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
+
+  orders Order[]
+}
+
+enum OrderStatus {
+  CONFIRMED
+  PREPARING
+  READY_FOR_PICKUP
+  OUT_FOR_DELIVERY
+  DELIVERED
+  CANCELLED
+  REFUNDED
+}
+
+model Order {
+  id                      String             @id @db.VarChar(15)
+  userId                  String
+  user                    User               @relation(fields: [userId], references: [id])
+  status                  OrderStatus        @default(CONFIRMED)
+  subtotal                Int
+  deliveryFee             Int
+  promoCode               String?            @db.VarChar(50)
+  promoDiscount           Int                @default(0)
+  total                   Int
+  deliveryAddressId       String?
+  deliveryAddress         Address?           @relation(fields: [deliveryAddressId], references: [id], onDelete: SetNull)
+  deliveryAddressSnapshot String             @db.Text
+  deliveryDate            String             @db.VarChar(50)
+  deliveryDateActual      DateTime           @db.Date
+  deliverySlot            String             @db.VarChar(50)
+  deliveryBoyId           String?
+  notes                   String?            @db.Text
+  cancelReason            String?            @db.VarChar(500)
+  cancelledAt             DateTime?
+  deliveredAt             DateTime?
+  createdAt               DateTime           @default(now())
+  updatedAt               DateTime           @updatedAt
+
+  items         OrderItem[]
+  statusHistory OrderStatusHistory[]
+  payments      Payment[]
+}
+
+model OrderItem {
+  id                  String  @id @default(cuid())
+  orderId             String  @db.VarChar(15)
+  order               Order   @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  productId           String  @db.VarChar(100)
+  productName         String  @db.VarChar(200)
+  productImage        String  @db.VarChar(500)
+  weight              String  @db.VarChar(20)
+  cutTypeId           String? @db.VarChar(50)
+  cutName             String  @db.VarChar(100)
+  cutExtraCharge      Int     @default(0)
+  unitPrice           Int
+  unitOriginalPrice   Int
+  quantity            Int
+  lineTotal           Int
+  specialInstructions String? @db.VarChar(200)
+}
+
+model OrderStatusHistory {
+  id         String   @id @default(cuid())
+  orderId    String   @db.VarChar(15)
+  order      Order    @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  fromStatus String?  @db.VarChar(50)
+  toStatus   String   @db.VarChar(50)
+  changedBy  String?
+  note       String?  @db.VarChar(500)
+  createdAt  DateTime @default(now())
+}
+
+enum PaymentMethod {
+  RAZORPAY
+  COD
+}
+
+enum PaymentStatus {
+  PENDING
+  PAID
+  FAILED
+  REFUNDED
+}
+
+model Payment {
+  id                String        @id @default(cuid())
+  orderId           String        @db.VarChar(15)
+  order             Order         @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  method            PaymentMethod
+  status            PaymentStatus @default(PENDING)
+  amount            Int
+  currency          String        @default("INR") @db.VarChar(3)
+  razorpayOrderId   String?       @db.VarChar(100)
+  razorpayPaymentId String?       @db.VarChar(100)
+  razorpaySignature String?       @db.VarChar(500)
+  failureReason     String?       @db.VarChar(500)
+  paidAt            DateTime?
+  refundedAt        DateTime?
+  refundId          String?       @db.VarChar(100)
+  refundAmount      Int?
+  createdAt         DateTime      @default(now())
+  updatedAt         DateTime      @updatedAt
+}
+
+model DeliverySettings {
+  id                    String             @id @default("default")
+  sameDayDelivery       Boolean            @default(false)
+  freeDeliveryThreshold Int                @default(699)
+  deliveryCharge        Int                @default(39)
+  updatedAt             DateTime           @updatedAt
+  businessSettings      BusinessSettings[]
+}
+
+model DeliverySlot {
+  id         String   @id @db.VarChar(50)
+  timeWindow String   @db.VarChar(50)
+  isEnabled  Boolean  @default(true)
+  maxOrders  Int      @default(15)
+  sortOrder  Int      @default(0)
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+}
+
+model DeliveryZone {
+  id             String   @id @default(cuid())
+  name           String   @db.VarChar(100)
+  city           String   @default("Navi Mumbai") @db.VarChar(100)
+  state          String   @default("Maharashtra") @db.VarChar(100)
+  pincode        String   @db.VarChar(6)
+  deliveryCharge Int?
+  minOrderAmount Int?
+  latitude       Float?
+  longitude      Float?
+  maxRadiusKm    Float    @default(5.0)
+  isActive       Boolean  @default(true)
+  sortOrder      Int      @default(0)
+  createdAt      DateTime @default(now())
+}
+
+enum DestinationType {
+  PRODUCT
+  CATEGORY
+  COLLECTION
+  CUSTOM
+}
+
+model Banner {
+  id               String          @id @default(cuid())
+  title            String          @db.VarChar(200)
+  subtitle         String?         @db.VarChar(300)
+  imageUrl         String          @db.VarChar(500)
+  destinationType  DestinationType
+  destinationValue String          @db.VarChar(200)
+  isActive         Boolean         @default(true)
+  sortOrder        Int             @default(0)
+  offerBadge       String?         @db.VarChar(50)
+  offerPrice       Int?
+  originalPrice    Int?
+  ctaText          String          @default("Shop Now") @db.VarChar(50)
+  startDate        DateTime?
+  endDate          DateTime?
+  createdAt        DateTime        @default(now())
+  updatedAt        DateTime        @updatedAt
+}
+
+enum AdminRole {
+  SUPER_ADMIN
+  MANAGER
+  VIEWER
+}
+
+model Admin {
+  id           String              @id @default(cuid())
+  name         String              @db.VarChar(100)
+  email        String              @unique @db.VarChar(255)
+  passwordHash String              @db.VarChar(500)
+  role         AdminRole           @default(VIEWER)
+  isActive     Boolean             @default(true)
+  lastLoginAt  DateTime?
+  createdAt    DateTime            @default(now())
+  updatedAt    DateTime            @updatedAt
+
+  sessions  AdminSession[]
+  reviews   ProductReview[]
+  movements InventoryMovement[]
+}
+
+model AdminSession {
+  id        String   @id @default(cuid())
+  adminId   String
+  admin     Admin    @relation(fields: [adminId], references: [id], onDelete: Cascade)
+  expiresAt DateTime
+  createdAt DateTime @default(now())
+}
+
+model Wishlist {
+  id        String         @id @default(cuid())
+  userId    String         @unique
+  user      User           @relation(fields: [userId], references: [id], onDelete: Cascade)
+  createdAt DateTime       @default(now())
+  updatedAt DateTime       @updatedAt
+
+  items WishlistItem[]
+}
+
+model WishlistItem {
+  id         String   @id @default(cuid())
+  wishlistId String
+  wishlist   Wishlist @relation(fields: [wishlistId], references: [id], onDelete: Cascade)
+  productId  String   @db.VarChar(100)
+  product    Product  @relation(fields: [productId], references: [id], onDelete: Cascade)
+  createdAt  DateTime @default(now())
+
+  @@unique([wishlistId, productId])
+  @@index([wishlistId, createdAt])
+}
+
+enum ReviewStatus {
+  PENDING
+  APPROVED
+  REJECTED
+}
+
+model ProductReview {
+  id                 String       @id @default(cuid())
+  productId          String       @db.VarChar(100)
+  product            Product      @relation(fields: [productId], references: [id], onDelete: Cascade)
+  userId             String
+  user               User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+  rating             Int
+  comment            String?      @db.Text
+  images             Json?
+  isVerifiedPurchase Boolean      @default(false)
+  status             ReviewStatus @default(PENDING)
+  moderatedById      String?
+  moderatedBy        Admin?       @relation(fields: [moderatedById], references: [id])
+  moderatorComment   String?      @db.VarChar(500)
+  createdAt          DateTime     @default(now())
+  updatedAt          DateTime     @updatedAt
+
+  @@index([productId])
+  @@index([productId, status, createdAt])
+  @@index([userId, productId])
+}
+
+model InventoryBatch {
+  id                String         @id @default(cuid())
+  productId         String         @db.VarChar(100)
+  product           Product        @relation(fields: [productId], references: [id])
+  weightOptionId    String
+  weightOption      WeightOption   @relation(fields: [weightOptionId], references: [id])
+  batchCode         String         @unique @db.VarChar(50)
+  quantityReceived  Int
+  quantityAvailable Int
+  unitCostPrice     Int
+  receivedDate      DateTime       @default(now())
+  expiryDate        DateTime
+  isActive          Boolean        @default(true)
+  createdAt         DateTime       @default(now())
+  updatedAt         DateTime       @updatedAt
+
+  movements InventoryMovement[]
+}
+
+enum InventoryMovementType {
+  STOCK_IN
+  SALE
+  WASTAGE
+  ADJUSTMENT
+  RETURN
+}
+
+model InventoryMovement {
+  id          String                @id @default(cuid())
+  batchId     String
+  batch       InventoryBatch        @relation(fields: [batchId], references: [id], onDelete: Cascade)
+  quantity    Int
+  type        InventoryMovementType
+  referenceId String?               @db.VarChar(50)
+  adminId     String?
+  admin       Admin?                @relation(fields: [adminId], references: [id])
+  notes       String?               @db.VarChar(500)
+  createdAt   DateTime              @default(now())
+}
+
+model BusinessSettings {
+  id                 String           @id @default("default")
+  businessName       String           @default("NONZO") @db.VarChar(150)
+  companyName        String           @default("Nonzo Retail Pvt. Ltd.") @db.VarChar(200)
+  address            String           @db.VarChar(300)
+  sector             String           @db.VarChar(100)
+  city               String           @default("Navi Mumbai") @db.VarChar(100)
+  state              String           @default("Maharashtra") @db.VarChar(100)
+  country            String           @default("India") @db.VarChar(100)
+  pincode            String           @default("410206") @db.VarChar(6)
+  primaryMobile      String           @db.VarChar(10)
+  whatsAppNumber     String           @db.VarChar(10)
+  supportNumber      String           @db.VarChar(10)
+  supportEmail       String           @default("support@nonzo.in") @db.VarChar(255)
+  businessHours      String           @default("7 AM - 10 PM") @db.VarChar(100)
+  instagramUrl       String?          @db.VarChar(500)
+  facebookUrl        String?          @db.VarChar(500)
+  youtubeUrl         String?          @db.VarChar(500)
+  whatsappLink       String?          @db.VarChar(500)
+  googleMapsLink     String?          @db.VarChar(500)
+  logoUrl            String           @db.VarChar(500)
+  faviconUrl         String           @db.VarChar(500)
+  currency           String           @default("INR") @db.VarChar(10)
+  currencySymbol     String           @default("₹") @db.VarChar(10)
+  minimumOrderAmount Int              @default(0)
+  businessTagline    String?          @db.VarChar(300)
+
+  // Future Admin Settings
+  otpExpiryMinutes       Int     @default(5)
+  maxOtpAttempts         Int     @default(5)
+  referralRewardReferrer Int     @default(50)
+  referralRewardReferee  Int     @default(50)
+  loyaltyPointsEarnRate  Float   @default(0.1)
+  codEnabled             Boolean @default(true)
+  onlinePaymentEnabled   Boolean @default(true)
+
+  deliverySettingsId String
+  deliverySettings   DeliverySettings @relation(fields: [deliverySettingsId], references: [id])
+  createdAt          DateTime         @default(now())
+  updatedAt          DateTime         @updatedAt
+}
+
+enum ActivityType {
+  LOGIN
+  LOGOUT
+  ADD_TO_CART
+  REMOVE_FROM_CART
+  ADD_TO_WISHLIST
+  REMOVE_FROM_WISHLIST
+  PLACE_ORDER
+  PAYMENT_SUCCESS
+  PAYMENT_FAILED
+  ADDRESS_ADDED
+  ADDRESS_UPDATED
+}
+
+model UserActivity {
+  id           String       @id @default(cuid())
+  userId       String
+  user         User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+  activityType ActivityType
+  referenceId  String?      @db.VarChar(50)
+  metadata     Json?
+  ipAddress    String?      @db.VarChar(45)
+  userAgent    String?      @db.VarChar(500)
+  createdAt    DateTime     @default(now())
+
+  @@index([userId])
+  @@index([activityType])
+  @@index([createdAt])
+  @@index([userId, activityType, createdAt])
+}
