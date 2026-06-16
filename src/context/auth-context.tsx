@@ -47,30 +47,52 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         console.error("Failed to parse nonzo_user from localStorage", e);
       }
     }
+
+    const checkSession = async () => {
+      try {
+        const res = await fetch("/api/auth/me");
+        if (res.ok) {
+          const data = await res.json();
+          setUser(data.user);
+          localStorage.setItem("nonzo_user", JSON.stringify(data.user));
+        } else {
+          setUser(null);
+          localStorage.removeItem("nonzo_user");
+        }
+      } catch (e) {
+        console.error("Failed to check active session from API:", e);
+      }
+    };
+    checkSession();
   }, []);
 
-  const login = (name: string, mobile: string, email?: string) => {
-    const newUser: UserProfile = {
-      name,
-      mobile,
-      email,
-      ...user // preserve address if they log in again
-    };
-    setUser(newUser);
-    localStorage.setItem("nonzo_user", JSON.stringify(newUser));
-
-    // Central registry for simulation
+  const login = async (name: string, mobile: string, email?: string) => {
     try {
-      const dbStr = localStorage.getItem("nonzo_users_db");
-      const db = dbStr ? JSON.parse(dbStr) : {};
-      db[mobile] = { ...db[mobile], ...newUser };
-      localStorage.setItem("nonzo_users_db", JSON.stringify(db));
+      const res = await fetch("/api/auth/register", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ name, email }),
+      });
+      if (res.ok) {
+        const data = await res.json();
+        setUser(data.user);
+        localStorage.setItem("nonzo_user", JSON.stringify(data.user));
+      } else {
+        const errorData = await res.json();
+        throw new Error(errorData.error || "Profile completion failed");
+      }
     } catch (e) {
       console.error("Failed to save user in registry", e);
+      throw e;
     }
   };
 
-  const logout = () => {
+  const logout = async () => {
+    try {
+      await fetch("/api/auth/logout", { method: "POST" });
+    } catch (e) {
+      console.error("Error logging out from server:", e);
+    }
     setUser(null);
     localStorage.removeItem("nonzo_user");
   };
@@ -95,46 +117,50 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   };
 
   const sendOtp = async (mobile: string): Promise<boolean> => {
-    // Simulate network delay
-    await new Promise((resolve) => setTimeout(resolve, 800));
-    console.log(`Simulated OTP 123456 sent to ${mobile}`);
-    return true;
+    try {
+      const res = await fetch("/api/auth/send-otp", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ mobile }),
+      });
+      if (!res.ok) {
+        const errorData = await res.json();
+        throw new Error(errorData.error || "Failed to send OTP");
+      }
+      return true;
+    } catch (e) {
+      console.error("Error in sendOtp API:", e);
+      throw e;
+    }
   };
 
   const verifyOtp = async (
     mobile: string,
     otp: string
   ): Promise<{ success: boolean; isExisting: boolean }> => {
-    // Simulate network delay
-    await new Promise((resolve) => setTimeout(resolve, 800));
-
-    // Support both 123456 and 1234 for testing convenience
-    if (otp !== "123456" && otp !== "1234") {
+    try {
+      const res = await fetch("/api/auth/verify-otp", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ mobile, otp }),
+      });
+      if (!res.ok) {
+        const errorData = await res.json();
+        throw new Error(errorData.error || "OTP verification failed");
+      }
+      const data = await res.json();
+      if (data.success) {
+        if (data.isExisting && data.user) {
+          setUser(data.user);
+          localStorage.setItem("nonzo_user", JSON.stringify(data.user));
+        }
+        return { success: true, isExisting: data.isExisting };
+      }
+      return { success: false, isExisting: false };
+    } catch (e) {
+      console.error("Error in verifyOtp API:", e);
       return { success: false, isExisting: false };
     }
-
-    let isExisting = false;
-    let existingProfile: UserProfile | null = null;
-
-    try {
-      const dbStr = localStorage.getItem("nonzo_users_db");
-      if (dbStr) {
-        const db = JSON.parse(dbStr);
-        if (db && db[mobile]) {
-          isExisting = true;
-          existingProfile = db[mobile];
-        }
-      }
-    } catch (e) {
-      console.error("Failed to search central user registry", e);
-    }
-
-    if (isExisting && existingProfile) {
-      setUser(existingProfile);
-      localStorage.setItem("nonzo_user", JSON.stringify(existingProfile));
-    }
-
-    return { success: true, isExisting };
   };
 
   return (

@@ -883,7 +883,7 @@ export default function CheckoutPage() {
               <input
                 type="text"
                 required
-                placeholder="Landmark / Directions (Optional)"
+                placeholder="Landmark / Directions"
                 value={newAddress.landmark}
                 onChange={(e) => setNewAddress({ ...newAddress, landmark: e.target.value })}
                 className="col-span-2 w-full rounded-xl border border-border-gray px-3.5 py-2.5 text-xs outline-none focus:border-brand-red"
@@ -970,7 +970,7 @@ export default function CheckoutPage() {
               />
               <input
                 type="text"
-                placeholder="Landmark / Directions (Optional)"
+                placeholder="Landmark / Directions"
                 value={editAddressData.landmark || ""}
                 onChange={(e) => setEditAddressData({ ...editAddressData, landmark: e.target.value })}
                 className="col-span-2 w-full rounded-xl border border-border-gray px-3.5 py-2.5 text-xs outline-none focus:border-brand-red"

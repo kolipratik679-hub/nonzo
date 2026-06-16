@@ -17,12 +17,14 @@ The project is transitionally moving from frontend simulation to full-stack impl
 * Prisma Schema
 * Seed Data
 * Database Architecture Freeze
+* Phase 3A – Authentication Architecture
+* Phase 3B – OTP Authentication Backend
 
 ## Current Active Phase
-Phase 3A – Authentication Architecture
+Phase 4 – Customer APIs
 
 ## Current Objective
-Prepare authentication architecture before implementation.
+Implement server-side customer APIs (Products, Cart, Addresses, Orders) connecting frontend components to MySQL.
 
 ## Completed Deliverables
 * **Project Initialization:** Next.js 16.2.9 configured with React 19.2.4, TypeScript, Tailwind CSS v4, and PostCSS. PWA `manifest.json` configured with standalone mode.
@@ -33,6 +35,7 @@ Prepare authentication architecture before implementation.
 * **Test Payment Integration:** Created Razorpay test mode order creation and verification API routes (`/api/razorpay/order` and `/api/razorpay/verify`).
 * **Relational Database Design:** Complete MySQL schema mapped to Prisma for users, sessions, addresses, products, categories, orders, cut types, inventory batches, and admin settings.
 * **Database Seeding:** Created `prisma/seed.js` containing full mock catalog (16 products, 5 categories, 6 cut types) and default delivery/banner settings.
+* **Backend OTP Authentication (Phase 3B):** Implemented database-backed Next.js API endpoints (`send-otp`, `verify-otp`, `register`, `logout`, `me`), JWT cookie session handling, MariaDB/Prisma client integration, activity logging, and frontend provider integration.
 
 ## Frozen Decisions
 * **Relational Database Choice:** MySQL database via Prisma ORM.
@@ -48,7 +51,7 @@ Prepare authentication architecture before implementation.
 * **Target Delivery Zone:** Limited to Ulwe Sectors 5, 8, 17, 24 (Pincode: 410206).
 
 ## Next Phase
-Phase 3B – OTP Authentication Backend
+Phase 4 – Customer APIs (Products, Cart, Addresses, Orders)
 
 ## Upcoming Phases
 * JWT & Session Management

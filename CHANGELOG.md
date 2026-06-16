@@ -100,9 +100,21 @@
 
 ---
 
-## [Phase 2] — Database ⬜ PENDING
-**Date:** Not started
-**Status:** Next phase — see `DEVELOPMENT_WORKFLOW.md` for details.
+## [Phase 3B] — OTP Authentication Backend Implementation Complete ✅
+**Date:** 2026-06-16
+**Status:** Complete — OTP authentication backend, JWT session management, user logging, and frontend provider integration are fully functional.
+
+### Changes
+- Implemented `PrismaClient` singleton with dynamically configured MariaDB database connection adapter parsing `DATABASE_URL`.
+- Created JWT helper module using `jose` library to handle HS256 Access and Refresh token generation and verification.
+- Developed backend API routes:
+  - `POST /api/auth/send-otp`: Generates random 6-digit OTP, validates number, enforces 60s cooldown, hourly limit (max 5), 15m lockouts on too many failed attempts, and returns mock OTP in dev payload.
+  - `POST /api/auth/verify-otp`: Validates OTP code, marks as verified, logs user activity, maps/creates user record with database-linked skeleton cart/wishlist, creates session record, and sets HTTP-Only cookies.
+  - `POST /api/auth/register`: Performs registration update for Name and Email details upon new user profile completion.
+  - `POST /api/auth/logout`: Invalidates the session in the DB, clears browser cookies, and creates logout activity logs.
+  - `GET /api/auth/me`: Decodes JWT cookie, validates DB session validity, implements access token auto-rotation, and evaluates user block status and profile completeness.
+- Integrated the frontend React context (`auth-context.tsx`) with the new API endpoints while keeping the existing UX layouts intact.
+- Verified all flows (signup, registration, login, logout, and session check) using automated browser interaction tests.
 
 ---
 
@@ -111,8 +123,8 @@
 | Version | Phase | Date | Summary |
 |---|---|---|---|
 | 1.0.0 | Phase 1 | 2026-06-16 | Complete frontend with simulated data |
-| 2.0.0 | Phase 2 | TBD | MySQL database via Prisma |
-| 3.0.0 | Phase 3 | TBD | Real OTP authentication |
+| 2.0.0 | Phase 2 | 2026-06-16 | MySQL database via Prisma & Seed catalog |
+| 3.0.0 | Phase 3 | 2026-06-16 | Backend OTP authentication & JWT Session |
 | 4.0.0 | Phase 4 | TBD | Customer-facing APIs |
 | 5.0.0 | Phase 5 | TBD | Production Razorpay |
 | 6.0.0 | Phase 6 | TBD | Full admin dashboard |
