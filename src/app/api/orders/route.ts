@@ -286,7 +286,7 @@ export async function POST(request: Request) {
         data: {
           id: orderId,
           userId: user.id,
-          status: "CONFIRMED",
+          status: "PENDING",
           subtotal: calculatedSubtotal,
           deliveryFee,
           promoCode: promoCode || null,
@@ -298,6 +298,17 @@ export async function POST(request: Request) {
           deliveryDateActual: getDeliveryDateActual(deliveryDate),
           deliverySlot,
           notes: address.landmark || "",
+        }
+      });
+
+      // Create Order Status History for PENDING
+      await tx.orderStatusHistory.create({
+        data: {
+          orderId: newOrder.id,
+          fromStatus: null,
+          toStatus: "PENDING",
+          changedBy: "CUSTOMER",
+          note: "Order placed successfully.",
         }
       });
 
@@ -333,7 +344,7 @@ export async function POST(request: Request) {
           razorpayOrderId: razorpayOrderId || null,
           razorpayPaymentId: razorpayPaymentId || null,
           razorpaySignature: razorpaySignature || null,
-          paidAt: paymentMethod === "online" ? getISTDate() : null
+          paidAt: paymentMethod === "online" ? getISTDate() : null,
         }
       });
 
@@ -343,7 +354,7 @@ export async function POST(request: Request) {
           userId: user.id,
           activityType: "PLACE_ORDER",
           referenceId: newOrder.id,
-          metadata: { total: calculatedTotal, paymentMethod }
+          metadata: { total: calculatedTotal, paymentMethod },
         }
       });
 
@@ -354,7 +365,7 @@ export async function POST(request: Request) {
             userId: user.id,
             activityType: "PAYMENT_SUCCESS",
             referenceId: newOrder.id,
-            metadata: { total: calculatedTotal, razorpayPaymentId }
+            metadata: { total: calculatedTotal, razorpayPaymentId },
           }
         });
       }

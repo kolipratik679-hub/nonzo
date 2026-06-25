@@ -27,8 +27,12 @@ import {
   Loader2,
   Edit2,
   Trash2,
+  RotateCcw,
+  X,
+  Calendar,
 } from "lucide-react";
 import { useAuth } from "@/context/auth-context";
+import { useCart } from "@/context/cart-context";
 
 // ── Accordion Row helper ────────────────────────────────────────────
 function AccordionSection({
@@ -119,6 +123,7 @@ function LogoutModal({
 export default function ProfilePage() {
   const router = useRouter();
   const { user, login: authLogin, logout: authLogout, sendOtp, verifyOtp } = useAuth();
+  const { addToCart, products, cutTypes } = useCart();
   
   const [activeAccordion, setActiveAccordion] = useState<string | null>("personal");
   const [showLogoutModal, setShowLogoutModal] = useState<boolean>(false);
@@ -165,6 +170,14 @@ export default function ProfilePage() {
 
   // User-scoped orders
   const [userOrders, setUserOrders] = useState<any[]>([]);
+
+  // Order cancel modal state (profile page)
+  const [showOrderCancelModal, setShowOrderCancelModal] = useState(false);
+  const [selectedCancelOrderId, setSelectedCancelOrderId] = useState<string | null>(null);
+  const [profileCancelReason, setProfileCancelReason] = useState("Changed my mind");
+  const [profileCustomReason, setProfileCustomReason] = useState("");
+  const [isProfileCancelling, setIsProfileCancelling] = useState(false);
+  const [profileCancelError, setProfileCancelError] = useState<string | null>(null);
 
   // Synchronize profile changes and load addresses / orders
   useEffect(() => {
@@ -237,6 +250,65 @@ export default function ProfilePage() {
       setUserOrders([]);
     }
   }, [user]);
+
+  // Reorder handler for profile page
+  const handleProfileReorder = (ord: any) => {
+    ord.items.forEach((item: any) => {
+      let product = products.find((p) => p.id === item.productId);
+      if (!product) product = products.find((p) => p.name.toLowerCase() === item.name.toLowerCase());
+      let cutType = cutTypes.find((c) => c.id === item.cutTypeId);
+      if (!cutType) cutType = cutTypes.find((c) => c.name.toLowerCase() === item.cut.toLowerCase());
+      if (!cutType && product) {
+        const fallbackCutId = product.allowedCuts[0] || "whole";
+        cutType = cutTypes.find((c) => c.id === fallbackCutId);
+      }
+      if (product && cutType) {
+        addToCart(product, item.quantity, item.weight, cutType, item.specialInstructions || "");
+      }
+    });
+    router.push("/cart");
+  };
+
+  // Cancel order handler for profile page
+  const handleProfileInitiateCancel = (orderId: string) => {
+    setSelectedCancelOrderId(orderId);
+    setProfileCancelReason("Changed my mind");
+    setProfileCustomReason("");
+    setProfileCancelError(null);
+    setShowOrderCancelModal(true);
+  };
+
+  const handleProfileConfirmCancel = async () => {
+    if (!selectedCancelOrderId) return;
+    setIsProfileCancelling(true);
+    setProfileCancelError(null);
+    const finalReason = profileCancelReason === "Other" ? profileCustomReason.trim() : profileCancelReason;
+    if (profileCancelReason === "Other" && !finalReason) {
+      setProfileCancelError("Please provide a cancellation reason.");
+      setIsProfileCancelling(false);
+      return;
+    }
+    try {
+      const res = await fetch("/api/orders/cancel", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ orderId: selectedCancelOrderId, reason: finalReason }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || "Failed to cancel order");
+      // Refresh orders list
+      const refreshRes = await fetch("/api/orders");
+      if (refreshRes.ok) {
+        const refreshData = await refreshRes.json();
+        if (refreshData.orders) setUserOrders(refreshData.orders);
+      }
+      setShowOrderCancelModal(false);
+    } catch (err: any) {
+      setProfileCancelError(err.message || "An unexpected error occurred.");
+    } finally {
+      setIsProfileCancelling(false);
+    }
+  };
 
   // Support Ticket Form state
   const [ticketSubject, setTicketSubject] = useState("");
@@ -1149,61 +1221,120 @@ export default function ProfilePage() {
               >
                 <div className="space-y-3.5">
                   {userOrders.length === 0 && (
-                    <p className="text-xs text-zinc-400 py-3 text-center">No orders placed yet. Add some fish!</p>
+                    <div className="text-center py-6 space-y-3">
+                      <p className="text-xs text-zinc-400">No orders placed yet. Add some fish!</p>
+                      <button
+                        onClick={() => router.push("/")}
+                        className="rounded-xl bg-brand-red px-4 py-2 text-xs font-bold text-white hover:bg-red-700 active-scale"
+                      >
+                        Browse Products
+                      </button>
+                    </div>
                   )}
 
-                  {userOrders.map((ord) => (
-                    <div
-                      key={ord.id}
-                      className="rounded-xl border border-border-gray p-3.5 space-y-3 bg-white"
-                    >
-                      <div className="flex items-center justify-between border-b border-border-gray/30 pb-2">
-                        <div>
-                          <span className="text-[10px] font-bold text-foreground block">
-                            {ord.id}
-                          </span>
-                          <span className="text-[9px] text-zinc-400 mt-0.5 block font-medium">
-                            {ord.date}
+                  {userOrders.map((ord) => {
+                    const isCancelled = ord.status === "CANCELLED" || ord.status === "Cancelled";
+                    const isDelivered = ord.status === "DELIVERED";
+                    const isPacked = ["PACKED", "SHIPPED", "READY_FOR_PICKUP", "OUT_FOR_DELIVERY"].includes(ord.status);
+                    const isCancellable = (ord.status === "PENDING" || ord.status === "CONFIRMED" || ord.status === "PREPARING") && !isCancelled;
+                    const showCancelDisabled = isPacked && !isCancelled;
+                    const showCancelBtn = isCancellable || showCancelDisabled;
+
+                    return (
+                      <div
+                        key={ord.id}
+                        className="rounded-2xl border border-border-gray bg-white p-4 space-y-3 shadow-sm"
+                      >
+                        {/* Header */}
+                        <div className="flex items-center justify-between border-b border-border-gray/30 pb-2.5">
+                          <div>
+                            <span className="text-[10px] font-black text-foreground block">{ord.id}</span>
+                            <span className="text-[9px] text-zinc-400 mt-0.5 flex items-center gap-1 font-medium">
+                              <Calendar className="h-3 w-3" />
+                              {ord.date}
+                            </span>
+                          </div>
+                          <span className={`rounded-full text-[9px] font-extrabold px-2.5 py-0.5 uppercase tracking-wide border ${
+                            isDelivered ? "bg-emerald-50 text-emerald-800 border-emerald-100"
+                            : isCancelled ? "bg-red-50 text-red-800 border-red-100"
+                            : isPacked ? "bg-orange-50 text-orange-800 border-orange-100"
+                            : (ord.status === "CONFIRMED" || ord.status === "PREPARING") ? "bg-blue-50 text-blue-800 border-blue-100"
+                            : "bg-amber-50 text-amber-800 border-amber-100"
+                          }`}>
+                            {ord.status}
                           </span>
                         </div>
-                        <span className="rounded-full bg-emerald-50 border border-emerald-100 text-emerald-800 text-[9px] font-bold px-2 py-0.5 uppercase tracking-wide">
-                          {ord.status}
-                        </span>
-                      </div>
 
-                      <div className="space-y-2.5">
-                        {ord.items.map((item: any, idx: number) => (
-                          <div
-                            key={idx}
-                            className="flex flex-col text-xs"
-                          >
-                            <div className="flex justify-between items-center">
-                              <span className="text-zinc-600 font-medium">
-                                {item.name}{" "}
-                                <strong className="text-foreground">
-                                  ({item.weight} &bull; {item.cut} x {item.quantity})
-                                </strong>
+                        {/* Items */}
+                        <div className="space-y-2">
+                          {ord.items.map((item: any, idx: number) => (
+                            <div key={idx} className="flex justify-between items-center text-xs">
+                              <span className="text-zinc-600 font-medium truncate max-w-[60%]">
+                                {item.name}
+                                <strong className="text-foreground"> ({item.weight} &bull; {item.cut} x{item.quantity})</strong>
                               </span>
-                              <span className="font-extrabold text-foreground">
-                                ₹{item.price * item.quantity}
-                              </span>
+                              <span className="font-extrabold text-foreground shrink-0">₹{item.price * item.quantity}</span>
                             </div>
-                            {item.specialInstructions && item.cut === "Special Cut" && (
-                              <div className="mt-1 text-[10px] text-zinc-500 bg-zinc-50 border border-zinc-100 rounded-lg p-2.5 italic">
-                                <strong className="text-[8px] uppercase font-extrabold text-zinc-400 block tracking-wider not-italic mb-0.5">Cut Note:</strong>
-                                &quot;{item.specialInstructions}&quot;
-                              </div>
+                          ))}
+                        </div>
+
+                        {/* Cancellation reason */}
+                        {isCancelled && ord.cancelReason && (
+                          <div className="text-[10px] text-red-700 bg-red-50 border border-red-100 rounded-lg p-2.5 italic">
+                            <strong className="text-[8px] uppercase font-extrabold text-red-400 block tracking-wider not-italic mb-0.5">Cancellation Reason:</strong>
+                            &quot;{ord.cancelReason}&quot;
+                          </div>
+                        )}
+
+                        {/* Total */}
+                        <div className="flex justify-between items-center pt-2 border-t border-border-gray/30 text-xs">
+                          <span className="text-zinc-400 font-semibold">Total Charged</span>
+                          <span className="font-black text-foreground">₹{ord.total}</span>
+                        </div>
+
+                        {/* Action Buttons */}
+                        <div className="flex flex-col gap-2 pt-1">
+                          <button
+                            onClick={() => router.push(`/orders/${ord.id}`)}
+                            className="w-full flex items-center justify-center gap-1.5 rounded-xl bg-neutral-900 py-2 text-xs font-bold text-white hover:bg-neutral-800 active-scale transition-colors"
+                          >
+                            Track &amp; Details
+                          </button>
+
+                          <div className="flex gap-2">
+                            <button
+                              onClick={() => handleProfileReorder(ord)}
+                              className="flex-1 flex items-center justify-center gap-1.5 rounded-xl border border-zinc-200 bg-white py-2 text-xs font-bold text-zinc-700 hover:bg-zinc-50 active-scale transition-colors"
+                            >
+                              <RotateCcw className="h-3.5 w-3.5" />
+                              Reorder
+                            </button>
+
+                            {showCancelBtn && (
+                              <button
+                                disabled={showCancelDisabled}
+                                onClick={() => isCancellable && handleProfileInitiateCancel(ord.id)}
+                                className={`flex-1 flex items-center justify-center gap-1.5 rounded-xl border py-2 text-xs font-bold transition-colors ${
+                                  showCancelDisabled
+                                    ? "border-zinc-200 bg-zinc-100 text-zinc-400 cursor-not-allowed"
+                                    : "border-red-200 bg-red-50/50 text-brand-red hover:bg-red-50 active-scale"
+                                }`}
+                              >
+                                <X className="h-3.5 w-3.5" />
+                                Cancel
+                              </button>
                             )}
                           </div>
-                        ))}
-                      </div>
 
-                      <div className="flex justify-between items-center pt-2 border-t border-border-gray/30 text-xs font-black">
-                        <span className="text-zinc-400">Total Charged</span>
-                        <span>₹{ord.total}</span>
+                          {showCancelDisabled && (
+                            <p className="text-[9px] text-zinc-400 text-center leading-tight font-medium">
+                              Order is already packed and cannot be cancelled.
+                            </p>
+                          )}
+                        </div>
                       </div>
-                    </div>
-                  ))}
+                    );
+                  })}
                 </div>
               </AccordionSection>
 
@@ -1350,6 +1481,101 @@ export default function ProfilePage() {
           </>
         )}
       </div>
+
+      {/* Cancel Order Modal — Profile Page */}
+      {showOrderCancelModal && (
+        <div className="fixed inset-0 z-50 bg-black/60 flex items-end sm:items-center justify-center p-0 sm:p-4 backdrop-blur-sm">
+          <div className="bg-white w-full sm:max-w-md rounded-t-3xl sm:rounded-2xl p-6 space-y-4 shadow-2xl relative max-h-[90vh] overflow-y-auto">
+            <button
+              onClick={() => setShowOrderCancelModal(false)}
+              className="absolute top-4 right-4 text-zinc-400 hover:text-foreground"
+            >
+              <X className="h-5 w-5" />
+            </button>
+
+            <div className="text-center space-y-1.5 pb-2">
+              <div className="mx-auto h-12 w-12 rounded-full bg-red-100 flex items-center justify-center mb-1">
+                <AlertTriangle className="h-6 w-6 text-brand-red" />
+              </div>
+              <h3 className="text-base font-black text-foreground uppercase tracking-wider">Cancel Order</h3>
+              <p className="text-[11px] text-zinc-400 leading-normal max-w-xs mx-auto">
+                We are sorry to see you cancel. Please let us know the reason so we can improve.
+              </p>
+            </div>
+
+            {profileCancelError && (
+              <div className="rounded-xl border border-red-200 bg-red-50 p-3 text-xs text-brand-red font-bold flex items-center gap-2.5">
+                <AlertTriangle className="h-4 w-4 shrink-0" />
+                <span>{profileCancelError}</span>
+              </div>
+            )}
+
+            <div className="space-y-4">
+              <div className="space-y-2">
+                {["Changed my mind", "Ordered incorrect items", "Delivery time is too long", "Found a better deal", "Other"].map((reason) => (
+                  <label
+                    key={reason}
+                    className={`flex items-center gap-3 p-3 rounded-xl border cursor-pointer transition-all ${
+                      profileCancelReason === reason
+                        ? "border-brand-red bg-red-50/30 text-brand-red font-bold"
+                        : "border-border-gray bg-white text-zinc-600 hover:bg-zinc-50"
+                    }`}
+                  >
+                    <input
+                      type="radio"
+                      name="profileCancelReason"
+                      value={reason}
+                      checked={profileCancelReason === reason}
+                      onChange={() => setProfileCancelReason(reason)}
+                      className="h-4 w-4 text-brand-red border-gray-300"
+                    />
+                    <span className="text-xs">{reason}</span>
+                  </label>
+                ))}
+              </div>
+
+              {profileCancelReason === "Other" && (
+                <div className="space-y-1.5">
+                  <label className="text-[10px] font-bold text-zinc-500 block uppercase">
+                    Custom Reason <span className="text-brand-red">*</span>
+                  </label>
+                  <textarea
+                    rows={3}
+                    maxLength={150}
+                    value={profileCustomReason}
+                    onChange={(e) => setProfileCustomReason(e.target.value)}
+                    placeholder="Describe why you want to cancel..."
+                    className="w-full rounded-xl border border-border-gray bg-white p-3 text-xs outline-none focus:border-brand-red resize-none font-medium"
+                  />
+                </div>
+              )}
+
+              <div className="flex gap-3 pt-2">
+                <button
+                  type="button"
+                  disabled={isProfileCancelling}
+                  onClick={() => setShowOrderCancelModal(false)}
+                  className="flex-1 rounded-xl border border-border-gray py-3.5 text-xs font-bold text-zinc-600 hover:bg-light-gray transition-colors"
+                >
+                  Keep Order
+                </button>
+                <button
+                  type="button"
+                  disabled={isProfileCancelling}
+                  onClick={handleProfileConfirmCancel}
+                  className="flex-1 rounded-xl bg-brand-red py-3.5 text-xs font-bold text-white hover:bg-red-700 active-scale disabled:bg-zinc-200 disabled:text-zinc-400 flex items-center justify-center transition-colors"
+                >
+                  {isProfileCancelling ? (
+                    <span className="inline-block animate-spin rounded-full h-4 w-4 border-2 border-white border-t-transparent" />
+                  ) : (
+                    "Cancel Order"
+                  )}
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
     </>
   );
 }

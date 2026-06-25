@@ -62,7 +62,7 @@ export async function POST(request: Request) {
     }
 
     // Status check
-    const allowedStatuses = ["CONFIRMED", "PREPARING"];
+    const allowedStatuses = ["PENDING", "CONFIRMED", "PREPARING"];
     const packedStatuses = ["PACKED", "SHIPPED", "READY_FOR_PICKUP", "OUT_FOR_DELIVERY", "DELIVERED"];
     if (!allowedStatuses.includes(order.status)) {
       const errorMessage = packedStatuses.includes(order.status)
@@ -71,7 +71,7 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: errorMessage }, { status: 400 });
     }
 
-    const now = getISTDate(); // standard UTC date
+    const now = getISTDate(); // standard UTC date (IST wall clock)
 
     // Update order status transactionally
     await prisma.$transaction(async (tx) => {
@@ -80,8 +80,9 @@ export async function POST(request: Request) {
         where: { id: orderId },
         data: {
           status: "CANCELLED",
+          cancelledBy: "CUSTOMER",
           cancelReason: reason,
-          cancelledAt: now
+          cancelledAt: now,
         }
       });
 
@@ -93,7 +94,6 @@ export async function POST(request: Request) {
           toStatus: "CANCELLED",
           changedBy: "CUSTOMER",
           note: reason,
-          createdAt: now
         }
       });
 
@@ -104,7 +104,6 @@ export async function POST(request: Request) {
           where: { orderId },
           data: {
             status: "REFUNDED",
-            updatedAt: now
           }
         });
       }
@@ -113,10 +112,9 @@ export async function POST(request: Request) {
       await tx.userActivity.create({
         data: {
           userId: user.id,
-          activityType: "PLACE_ORDER", // mapping cancel activity under PLACE_ORDER with metadata action: CANCEL
+          activityType: "PLACE_ORDER",
           referenceId: orderId,
           metadata: { action: "CANCEL_ORDER", reason },
-          createdAt: now
         }
       });
     });

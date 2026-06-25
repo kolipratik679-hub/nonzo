@@ -43,6 +43,9 @@ export default function CheckoutPage() {
   // Address list selection state
   const [localAddresses, setLocalAddresses] = useState<any[]>([]);
   const [selectedAddressId, setSelectedAddressId] = useState<string>("");
+  const [addressesLoaded, setAddressesLoaded] = useState<boolean>(false);
+  // Ref to prevent ondismiss from overwriting a successful Razorpay payment
+  const orderSucceededRef = React.useRef(false);
 
   // Gating Auth State Flow for Non-logged in checkout view
   const [authStep, setAuthStep] = useState<"mobile" | "otp" | "profile" | "address">("mobile");
@@ -77,6 +80,7 @@ export default function CheckoutPage() {
   // Synchronize user and addresses — DB is the authoritative source
   useEffect(() => {
     if (user) {
+      setAddressesLoaded(false);
       const fetchAddresses = async () => {
         try {
           const res = await fetch("/api/address");
@@ -87,11 +91,14 @@ export default function CheckoutPage() {
             if (addresses.length > 0) {
               const defaultAddr = addresses.find((a: any) => a.isDefault) || addresses[0];
               setSelectedAddressId(defaultAddr.id);
+              setIsAddingAddress(false); // Has addresses — hide Add form
             } else {
               setSelectedAddressId("");
+              setIsAddingAddress(true); // Confirmed no addresses — show Add form
             }
             // Cache in localStorage for offline resilience only
             localStorage.setItem(`nonzo_addresses_${user.mobile}`, JSON.stringify(addresses));
+            setAddressesLoaded(true);
             return;
           }
         } catch (e) {
@@ -108,30 +115,32 @@ export default function CheckoutPage() {
             if (parsed.length > 0) {
               const defaultAddr = parsed.find((a: any) => a.isDefault) || parsed[0];
               setSelectedAddressId(defaultAddr.id);
+              setIsAddingAddress(false);
             } else {
               setSelectedAddressId("");
+              setIsAddingAddress(true);
             }
           } catch (e) {
             setLocalAddresses([]);
             setSelectedAddressId("");
+            setIsAddingAddress(true);
           }
         } else {
           setLocalAddresses([]);
           setSelectedAddressId("");
+          setIsAddingAddress(true);
         }
+        setAddressesLoaded(true);
       };
       fetchAddresses();
     } else {
       setLocalAddresses([]);
       setSelectedAddressId("");
+      setAddressesLoaded(false);
     }
   }, [user]);
-
-  useEffect(() => {
-    if (user && localAddresses.length === 0) {
-      setIsAddingAddress(true);
-    }
-  }, [localAddresses, user]);
+  // NOTE: Removed the separate useEffect that opened Add Address form — it caused
+  // a race condition where returning users saw the form before addresses loaded from DB.
 
   const today = new Date();
   const tomorrow = new Date();
@@ -617,11 +626,13 @@ export default function CheckoutPage() {
               razorpayPaymentId: response.razorpay_payment_id,
               razorpaySignature: response.razorpay_signature
             });
+            orderSucceededRef.current = true; // Mark success so ondismiss doesn't overwrite
           } catch (verifyError: any) {
-            setPaymentError(verifyError.message || "Payment verification failed. Please try again.");
-          } finally {
+            setPaymentError(verifyError.message || "Payment verification failed. Please contact support.");
             setIsProcessingPayment(false);
           }
+          // Do NOT call setIsProcessingPayment(false) here on success —
+          // isOrderPlaced=true already unmounts the checkout form.
         },
         prefill: {
           name: user?.name || selectedAddress?.fullName || "",
@@ -636,8 +647,11 @@ export default function CheckoutPage() {
         },
         modal: {
           ondismiss: function () {
-            setIsProcessingPayment(false);
-            setPaymentError("Payment verification cancelled. You can retry or complete order via COD.");
+            // Only set error if payment did NOT succeed already
+            if (!orderSucceededRef.current) {
+              setIsProcessingPayment(false);
+              setPaymentError("Payment cancelled. You can retry or choose Cash on Delivery.");
+            }
           }
         }
       };

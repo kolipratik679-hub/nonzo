@@ -227,10 +227,10 @@ export default function OrderHistoryPage() {
       ) : (
         <div className="space-y-4">
           {orders.map((ord) => {
-            const isCancelled = ord.status === "CANCELLED";
+            const isCancelled = ord.status === "CANCELLED" || ord.status === "Cancelled";
             const isDelivered = ord.status === "DELIVERED";
             const isPacked = ["PACKED", "SHIPPED", "READY_FOR_PICKUP", "OUT_FOR_DELIVERY"].includes(ord.status);
-            const isCancellable = (ord.status === "CONFIRMED" || ord.status === "PREPARING") && !isCancelled;
+            const isCancellable = (ord.status === "PENDING" || ord.status === "CONFIRMED" || ord.status === "PREPARING") && !isCancelled;
             const showCancelDisabled = isPacked && !isCancelled;
             const showCancelBtn = isCancellable || showCancelDisabled;
             
@@ -342,10 +342,17 @@ export default function OrderHistoryPage() {
                 </div>
 
                 {/* Action buttons row */}
-                <div className="flex gap-2 pt-3 border-t border-border-gray/50">
+                <div className="flex flex-col sm:flex-row gap-2 pt-3 border-t border-border-gray/50">
+                  <button
+                    onClick={() => router.push(`/orders/${ord.id}`)}
+                    className="flex-1 flex items-center justify-center gap-1.5 rounded-xl bg-neutral-900 py-2 text-xs font-bold text-white hover:bg-neutral-800 active-scale transition-colors shadow-sm"
+                  >
+                    Track &amp; Details
+                  </button>
+
                   <button
                     onClick={() => handleReorder(ord)}
-                    className="flex-1 flex items-center justify-center gap-1.5 rounded-xl border border-zinc-200 bg-white py-2 text-xs font-bold text-zinc-700 hover:bg-zinc-50 active-scale transition-colors"
+                    className="flex-1 flex items-center justify-center gap-1.5 rounded-xl border border-zinc-200 bg-white py-2 text-xs font-bold text-zinc-700 hover:bg-zinc-50 active-scale transition-colors shadow-sm"
                   >
                     <RotateCcw className="h-3.5 w-3.5" />
                     Reorder Items

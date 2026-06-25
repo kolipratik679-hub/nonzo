@@ -197,6 +197,7 @@ model Address {
 }
 
 enum OrderStatus {
+  PENDING
   CONFIRMED
   PREPARING
   PACKED
@@ -212,7 +213,7 @@ model Order {
   id                      String             @id @db.VarChar(15)
   userId                  String
   user                    User               @relation(fields: [userId], references: [id])
-  status                  OrderStatus        @default(CONFIRMED)
+  status                  OrderStatus        @default(PENDING)
   subtotal                Int
   deliveryFee             Int
   promoCode               String?            @db.VarChar(50)
@@ -226,6 +227,7 @@ model Order {
   deliverySlot            String             @db.VarChar(50)
   deliveryBoyId           String?
   notes                   String?            @db.Text
+  cancelledBy             String?            @db.VarChar(50)
   cancelReason            String?            @db.VarChar(500)
   cancelledAt             DateTime?
   deliveredAt             DateTime?

@@ -23,6 +23,7 @@ import {
   Edit2,
   Save,
   X,
+  AlertTriangle,
 } from "lucide-react";
 import { CATEGORIES } from "@/lib/mock-data";
 import { useCart } from "@/context/cart-context";
@@ -124,6 +125,84 @@ export default function AdminDashboard() {
 
   // 5. Placed orders state
   const [placedOrders, setPlacedOrders] = useState<any[]>([]);
+  const [adminCancelOrderId, setAdminCancelOrderId] = useState<string | null>(null);
+  const [adminCancelReason, setAdminCancelReason] = useState("Out of Stock");
+  const [adminCustomReason, setAdminCustomReason] = useState("");
+  const [isSubmittingAdminCancel, setIsSubmittingAdminCancel] = useState(false);
+  const [showAdminCancelModal, setShowAdminCancelModal] = useState(false);
+
+  const fetchPlacedOrders = async () => {
+    try {
+      const res = await fetch("/api/admin/orders");
+      if (res.ok) {
+        const data = await res.json();
+        if (data.orders) {
+          setPlacedOrders(data.orders);
+        }
+      }
+    } catch (e) {
+      console.error("Failed to fetch admin orders from DB:", e);
+    }
+  };
+
+  const handleUpdateStatus = async (orderId: string, nextStatus: string) => {
+    try {
+      const res = await fetch("/api/admin/orders", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ orderId, status: nextStatus })
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        alert(data.error || "Failed to update status");
+        return;
+      }
+      triggerNotification(`Order status updated to ${nextStatus}`);
+      fetchPlacedOrders();
+    } catch (e) {
+      console.error("Failed to update status:", e);
+      alert("Error updating order status");
+    }
+  };
+
+  const handleInitiateAdminCancel = (orderId: string) => {
+    setAdminCancelOrderId(orderId);
+    setAdminCancelReason("Out of Stock");
+    setAdminCustomReason("");
+    setShowAdminCancelModal(true);
+  };
+
+  const handleConfirmAdminCancel = async () => {
+    if (!adminCancelOrderId) return;
+    setIsSubmittingAdminCancel(true);
+    const finalReason = adminCancelReason === "Other" ? adminCustomReason.trim() : adminCancelReason;
+    if (adminCancelReason === "Other" && !finalReason) {
+      alert("Please enter a custom reason");
+      setIsSubmittingAdminCancel(false);
+      return;
+    }
+
+    try {
+      const res = await fetch("/api/admin/orders", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ orderId: adminCancelOrderId, action: "cancel", reason: finalReason })
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        alert(data.error || "Failed to cancel order");
+        return;
+      }
+      triggerNotification("Order cancelled by admin.");
+      setShowAdminCancelModal(false);
+      fetchPlacedOrders();
+    } catch (e) {
+      console.error("Failed to cancel order:", e);
+      alert("Error cancelling order");
+    } finally {
+      setIsSubmittingAdminCancel(false);
+    }
+  };
 
   // Set default product ID once products are loaded
   useEffect(() => {
@@ -131,6 +210,13 @@ export default function AdminDashboard() {
       setSelectedProductId(products[0].id);
     }
   }, [products, selectedProductId]);
+
+  // Load from database/localStorage on activeTab change and mount
+  useEffect(() => {
+    if (activeTab === "orders") {
+      fetchPlacedOrders();
+    }
+  }, [activeTab]);
 
   // Load from localStorage on mount
   useEffect(() => {
@@ -164,15 +250,8 @@ export default function AdminDashboard() {
       );
     }
 
-    // Load placed orders
-    const savedOrders = localStorage.getItem("nonzo_placed_orders");
-    if (savedOrders) {
-      try {
-        setPlacedOrders(JSON.parse(savedOrders));
-      } catch (e) {
-        console.error("Failed to parse orders on mount", e);
-      }
-    }
+    // Load placed orders initially from DB
+    fetchPlacedOrders();
 
     // Load banners
     const savedBanners = localStorage.getItem("nonzo_admin_banners");
@@ -1485,16 +1564,10 @@ export default function AdminDashboard() {
                 Customer Placed Orders ({placedOrders.length})
               </h3>
               <button
-                onClick={() => {
-                  if (confirm("Are you sure you want to clear all system orders?")) {
-                    localStorage.removeItem("nonzo_placed_orders");
-                    setPlacedOrders([]);
-                    triggerNotification("All orders cleared from system.");
-                  }
-                }}
-                className="text-[10px] font-bold text-brand-red border border-red-200 rounded-lg px-2.5 py-1 hover:bg-red-50"
+                onClick={fetchPlacedOrders}
+                className="text-[10px] font-bold text-zinc-600 border border-zinc-200 rounded-lg px-2.5 py-1 hover:bg-zinc-50 transition-all active-scale"
               >
-                Clear All Orders
+                Refresh List
               </button>
             </div>
 
@@ -1505,7 +1578,21 @@ export default function AdminDashboard() {
             ) : (
               <div className="space-y-4">
                 {placedOrders.map((ord: any) => {
-                  const isCancelled = ord.status === "Cancelled" || ord.status === "CANCELLED";
+                  const isCancelled = ord.status === "CANCELLED" || ord.status === "Cancelled";
+                  const isDelivered = ord.status === "DELIVERED" || ord.status === "Delivered";
+                  
+                  const statusMap: Record<string, { label: string; next: string | null; actionLabel: string }> = {
+                    PENDING: { label: "Pending Confirmation", next: "CONFIRMED", actionLabel: "Confirm Order" },
+                    CONFIRMED: { label: "Confirmed", next: "PREPARING", actionLabel: "Start Preparing" },
+                    PREPARING: { label: "Preparing", next: "PACKED", actionLabel: "Pack Order" },
+                    PACKED: { label: "Packed", next: "OUT_FOR_DELIVERY", actionLabel: "Send Out For Delivery" },
+                    OUT_FOR_DELIVERY: { label: "Out For Delivery", next: "DELIVERED", actionLabel: "Complete Delivery" },
+                    DELIVERED: { label: "Delivered", next: null, actionLabel: "" },
+                    CANCELLED: { label: "Cancelled", next: null, actionLabel: "" }
+                  };
+                  
+                  const currentConf = statusMap[ord.status] || { label: ord.status, next: null, actionLabel: "" };
+
                   return (
                     <div
                       key={ord.id}
@@ -1514,12 +1601,14 @@ export default function AdminDashboard() {
                       <div className="flex flex-wrap justify-between items-start border-b border-border-gray pb-2 gap-2 text-xs">
                         <div>
                           <span className="font-extrabold text-foreground block">Order ID: {ord.id}</span>
-                          <span className="text-[10px] text-zinc-400 block mt-0.5 font-medium">{ord.date}</span>
+                          <span className="text-[10px] text-zinc-400 block mt-0.5 font-medium">Placed on: {ord.createdAt}</span>
                         </div>
                         <div className="text-right">
                           <span className={`rounded-full text-[9px] font-black px-2.5 py-0.5 uppercase block w-fit ml-auto border ${
                             isCancelled
                               ? "bg-red-50 border-red-100 text-brand-red font-bold"
+                              : isDelivered
+                              ? "bg-emerald-50 border-emerald-100 text-emerald-800"
                               : "bg-blue-50 border-blue-100 text-blue-800"
                           }`}>
                             {ord.status}
@@ -1537,15 +1626,15 @@ export default function AdminDashboard() {
                         {ord.items.map((item: any, idx: number) => (
                           <div key={idx} className="flex flex-col text-xs bg-white border border-border-gray/40 rounded-xl p-2.5">
                             <div className="flex justify-between font-bold">
-                              <span className="text-foreground">{item.name}</span>
+                              <span className="text-foreground">{item.productName || item.name}</span>
                               <span className="text-foreground">₹{item.price * item.quantity}</span>
                             </div>
                             <div className="text-[10px] text-zinc-400 font-semibold mt-0.5">
-                              Portion: {item.weight} &bull; Cut: {item.cut} x {item.quantity}
+                              Portion: {item.weight} &bull; Cut: {item.cutName || item.cut} x {item.quantity}
                             </div>
-                            {item.specialInstructions && item.cut === "Special Cut" && (
+                            {item.specialInstructions && (
                               <div className="mt-1.5 text-[10px] text-zinc-600 bg-red-50/40 border border-red-100/50 rounded-lg p-2 font-medium italic">
-                                <strong className="text-[8px] uppercase font-extrabold text-brand-red block tracking-wider not-italic mb-0.5">Cut Request Notes:</strong>
+                                <strong className="text-[8px] uppercase font-extrabold text-brand-red block tracking-wider not-italic mb-0.5">Special Notes:</strong>
                                 &quot;{item.specialInstructions}&quot;
                               </div>
                             )}
@@ -1553,18 +1642,38 @@ export default function AdminDashboard() {
                         ))}
                       </div>
 
+                      {/* Timeline logs */}
+                      {ord.statusHistory && ord.statusHistory.length > 0 && (
+                        <div className="bg-white border border-zinc-150 rounded-xl p-3 text-[10px] space-y-1.5 shadow-sm">
+                          <span className="font-extrabold text-zinc-400 uppercase tracking-wider block text-[8px]">Status History Log</span>
+                          <div className="space-y-1 divide-y divide-zinc-50">
+                            {ord.statusHistory.map((hist: any, hIdx: number) => (
+                              <div key={hIdx} className="flex justify-between items-start gap-4 pt-1 first:pt-0 text-zinc-500 font-medium">
+                                <span>
+                                  {hist.fromStatus || "Placed"} → <strong className="text-zinc-700">{hist.toStatus}</strong>
+                                  {hist.note && <span className="text-[9px] text-zinc-400 block italic">Note: {hist.note}</span>}
+                                </span>
+                                <span className="text-[9px] text-zinc-400 shrink-0 font-semibold">
+                                  {hist.date} {hist.time} by {hist.changedBy || "CUSTOMER"}
+                                </span>
+                              </div>
+                            ))}
+                          </div>
+                        </div>
+                      )}
+
                       {/* Cancellation Details */}
                       {isCancelled && (
                         <div className="bg-red-50/55 border border-red-100 rounded-xl p-3 text-xs space-y-1.5 animate-fade-in">
                           <div>
                             <span className="text-[10px] text-red-400 font-extrabold uppercase tracking-wide block">Cancellation Time</span>
                             <span className="font-bold text-red-800">
-                              {ord.cancelledAt ? formatToIST(ord.cancelledAt) : "N/A"}
+                              {ord.cancelledAt ? ord.cancelledAt : "N/A"}
                             </span>
                           </div>
                           {ord.cancelReason && (
                             <div className="pt-1.5 border-t border-red-100/50">
-                              <span className="text-[10px] text-red-400 font-extrabold uppercase tracking-wide block">Reason Given</span>
+                              <span className="text-[10px] text-red-400 font-extrabold uppercase tracking-wide block">Reason ({ord.cancelledBy || "Unknown"})</span>
                               <p className="font-medium italic text-brand-red">&quot;{ord.cancelReason}&quot;</p>
                             </div>
                           )}
@@ -1574,18 +1683,142 @@ export default function AdminDashboard() {
                       <div className="flex flex-wrap justify-between items-center text-xs pt-2 border-t border-border-gray/30 gap-2">
                         <div>
                           <span className="text-zinc-400 font-semibold block text-[9px] uppercase">Destination</span>
-                          <span className="font-bold text-zinc-600">{ord.deliveryAddress}</span>
+                          <span className="font-bold text-zinc-600">{ord.deliveryAddressSnapshot || ord.deliveryAddress}</span>
                         </div>
                         <div className="text-right">
                           <span className="text-zinc-400 font-semibold block text-[9px] uppercase">Charged Total</span>
                           <span className="font-black text-foreground">₹{ord.total}</span>
                         </div>
                       </div>
+
+                      {/* Status Management Action Buttons */}
+                      {!isCancelled && !isDelivered && (
+                        <div className="flex gap-2.5 pt-2 border-t border-border-gray/30">
+                          {currentConf.next && (
+                            <button
+                              onClick={() => handleUpdateStatus(ord.id, currentConf.next!)}
+                              className="flex-1 rounded-xl bg-brand-red text-white py-2.5 text-xs font-bold transition-all hover:bg-red-700 active-scale shadow-sm"
+                            >
+                              {currentConf.actionLabel} (→ {currentConf.next})
+                            </button>
+                          )}
+                          <button
+                            onClick={() => handleInitiateAdminCancel(ord.id)}
+                            className="flex-1 rounded-xl border border-red-200 bg-red-50/50 text-brand-red py-2.5 text-xs font-bold transition-all hover:bg-red-50 active-scale shadow-sm"
+                          >
+                            Cancel Order
+                          </button>
+                        </div>
+                      )}
                     </div>
                   );
                 })}
               </div>
             )}
+          </div>
+        </div>
+      )}
+
+      {/* ADMIN CANCELLATION MODAL */}
+      {showAdminCancelModal && (
+        <div className="fixed inset-0 z-50 bg-black/60 flex items-center justify-center p-4 backdrop-blur-sm">
+          <div className="bg-white w-full max-w-md rounded-2xl p-6 space-y-4 shadow-2xl relative animate-slide-up">
+            <button
+              onClick={() => setShowAdminCancelModal(false)}
+              className="absolute top-4 right-4 text-zinc-400 hover:text-foreground"
+            >
+              <X className="h-5 w-5" />
+            </button>
+
+            <div className="text-center space-y-1.5 pb-2">
+              <div className="mx-auto h-12 w-12 rounded-full bg-red-100 flex items-center justify-center mb-1">
+                <AlertTriangle className="h-6 w-6 text-brand-red" />
+              </div>
+              <h3 className="text-base font-black text-foreground uppercase tracking-wider">
+                Admin Cancellation
+              </h3>
+              <p className="text-[11px] text-zinc-400 leading-normal max-w-xs mx-auto">
+                Select a reason to cancel Order #{adminCancelOrderId}. This will refund online payments and log the action.
+              </p>
+            </div>
+
+            <div className="space-y-4">
+              <div className="space-y-1.5">
+                <label className="text-[10px] font-bold text-zinc-500 block uppercase">
+                  Select Reason
+                </label>
+                <div className="space-y-2">
+                  {[
+                    "Out of Stock",
+                    "Product Damaged",
+                    "Delivery Area Not Serviceable",
+                    "Technical Issue",
+                    "Other"
+                  ].map((reason) => (
+                    <label
+                      key={reason}
+                      className={`flex items-center gap-3 p-3 rounded-xl border cursor-pointer transition-all ${
+                        adminCancelReason === reason
+                          ? "border-brand-red bg-red-50/30 text-brand-red font-bold"
+                          : "border-border-gray bg-white text-zinc-600 hover:bg-zinc-50"
+                      }`}
+                    >
+                      <input
+                        type="radio"
+                        name="adminCancelReason"
+                        value={reason}
+                        checked={adminCancelReason === reason}
+                        onChange={() => setAdminCancelReason(reason)}
+                        className="h-4 w-4 text-brand-red focus:ring-brand-red border-gray-300"
+                      />
+                      <span className="text-xs">{reason}</span>
+                    </label>
+                  ))}
+                </div>
+              </div>
+
+              {adminCancelReason === "Other" && (
+                <div className="space-y-1.5 animate-fade-in">
+                  <label className="text-[10px] font-bold text-zinc-500 block uppercase">
+                    Custom Reason <span className="text-brand-red">*</span>
+                  </label>
+                  <textarea
+                    rows={3}
+                    maxLength={150}
+                    value={adminCustomReason}
+                    onChange={(e) => setAdminCustomReason(e.target.value)}
+                    placeholder="Describe why you want to cancel this order..."
+                    className="w-full rounded-xl border border-border-gray bg-white p-3 text-xs outline-none focus:border-brand-red focus:ring-1 focus:ring-brand-red resize-none font-medium"
+                  />
+                  <div className="text-right text-[9px] text-zinc-400 font-semibold">
+                    {adminCustomReason.length}/150 characters
+                  </div>
+                </div>
+              )}
+
+              <div className="flex gap-3 pt-2">
+                <button
+                  type="button"
+                  disabled={isSubmittingAdminCancel}
+                  onClick={() => setShowAdminCancelModal(false)}
+                  className="flex-1 rounded-xl border border-border-gray py-3.5 text-xs font-bold text-zinc-600 hover:bg-light-gray transition-colors"
+                >
+                  Keep Order
+                </button>
+                <button
+                  type="button"
+                  disabled={isSubmittingAdminCancel}
+                  onClick={handleConfirmAdminCancel}
+                  className="flex-1 rounded-xl bg-brand-red py-3.5 text-xs font-bold text-white hover:bg-red-700 active-scale disabled:bg-zinc-200 disabled:text-zinc-400 flex items-center justify-center transition-colors"
+                >
+                  {isSubmittingAdminCancel ? (
+                    <span className="inline-block animate-spin rounded-full h-4 w-4 border-2 border-white border-t-transparent" />
+                  ) : (
+                    "Cancel Order"
+                  )}
+                </button>
+              </div>
+            </div>
           </div>
         </div>
       )}
