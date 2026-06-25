@@ -127,14 +127,22 @@ export default function CartPage() {
     }
   };
 
-  const handleProfileSubmit = (e: React.FormEvent) => {
+  const handleProfileSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!authName.trim()) {
       setAuthError("Please enter your full name");
       return;
     }
     setAuthError(null);
-    setAuthStep("address");
+    setIsAuthLoading(true);
+    try {
+      await login(authName, authMobile, authEmail);
+      setShowAuthModal(false);
+    } catch (err: any) {
+      setAuthError(err.message || "Failed to complete profile registration.");
+    } finally {
+      setIsAuthLoading(false);
+    }
   };
 
   const handleAddressSubmit = (e: React.FormEvent) => {

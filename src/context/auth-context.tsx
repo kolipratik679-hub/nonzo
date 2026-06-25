@@ -97,22 +97,32 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     localStorage.removeItem("nonzo_user");
   };
 
-  const updateUserAddress = (address: UserProfile["address"]) => {
+  const updateUserAddress = async (address: UserProfile["address"]) => {
     if (!user) return;
     const updatedUser = { ...user, address };
     setUser(updatedUser);
     localStorage.setItem("nonzo_user", JSON.stringify(updatedUser));
 
-    // Central registry update
-    try {
-      const dbStr = localStorage.getItem("nonzo_users_db");
-      const db = dbStr ? JSON.parse(dbStr) : {};
-      if (db[user.mobile]) {
-        db[user.mobile].address = address;
-        localStorage.setItem("nonzo_users_db", JSON.stringify(db));
+    if (address) {
+      try {
+        await fetch("/api/address", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            tag: address.tag,
+            fullName: user.name,
+            flat: address.flat,
+            area: address.area,
+            city: address.city,
+            pincode: address.pincode,
+            phone: address.phone,
+            landmark: address.landmark || "",
+            isDefault: true
+          })
+        });
+      } catch (e) {
+        console.error("Failed to update user address in DB:", e);
       }
-    } catch (e) {
-      console.error("Failed to update user address in registry", e);
     }
   };
 

@@ -174,30 +174,64 @@ export default function ProfilePage() {
       setEditMobile(user.mobile);
 
       // Load user specific addresses
-      const addressKey = `nonzo_addresses_${user.mobile}`;
-      const savedAddrs = localStorage.getItem(addressKey);
-      if (savedAddrs) {
+      const fetchAddresses = async () => {
         try {
-          setAddresses(JSON.parse(savedAddrs));
+          const res = await fetch("/api/address");
+          if (res.ok) {
+            const data = await res.json();
+            if (data.addresses) {
+              setAddresses(data.addresses);
+              localStorage.setItem(`nonzo_addresses_${user.mobile}`, JSON.stringify(data.addresses));
+              return;
+            }
+          }
         } catch (e) {
-          console.error("Failed to parse addresses", e);
+          console.error("Failed to fetch addresses:", e);
         }
-      } else {
-        setAddresses([]);
-      }
+        
+        // Fallback
+        const savedAddrs = localStorage.getItem(`nonzo_addresses_${user.mobile}`);
+        if (savedAddrs) {
+          try {
+            setAddresses(JSON.parse(savedAddrs));
+          } catch (e) {
+            console.error("Failed to parse addresses", e);
+          }
+        } else {
+          setAddresses([]);
+        }
+      };
+      fetchAddresses();
 
       // Load user specific orders
-      const ordersKey = `nonzo_orders_${user.mobile}`;
-      const savedOrders = localStorage.getItem(ordersKey);
-      if (savedOrders) {
+      const fetchOrders = async () => {
         try {
-          setUserOrders(JSON.parse(savedOrders));
+          const res = await fetch("/api/orders");
+          if (res.ok) {
+            const data = await res.json();
+            if (data.orders) {
+              setUserOrders(data.orders);
+              localStorage.setItem(`nonzo_orders_${user.mobile}`, JSON.stringify(data.orders));
+              return;
+            }
+          }
         } catch (e) {
-          console.error("Failed to parse orders", e);
+          console.error("Failed to fetch orders:", e);
         }
-      } else {
-        setUserOrders([]);
-      }
+        
+        // Fallback
+        const savedOrders = localStorage.getItem(`nonzo_orders_${user.mobile}`);
+        if (savedOrders) {
+          try {
+            setUserOrders(JSON.parse(savedOrders));
+          } catch (e) {
+            console.error("Failed to parse orders", e);
+          }
+        } else {
+          setUserOrders([]);
+        }
+      };
+      fetchOrders();
     } else {
       setAddresses([]);
       setUserOrders([]);
@@ -264,14 +298,21 @@ export default function ProfilePage() {
     }
   };
 
-  const handleProfileSubmit = (e: React.FormEvent) => {
+  const handleProfileSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!authName.trim()) {
       setAuthError("Please enter your full name");
       return;
     }
     setAuthError(null);
-    setAuthStep("address");
+    setIsAuthLoading(true);
+    try {
+      await authLogin(authName, authMobile, authEmail);
+    } catch (err: any) {
+      setAuthError(err.message || "Failed to complete profile registration.");
+    } finally {
+      setIsAuthLoading(false);
+    }
   };
 
   const handleAddressSubmit = (e: React.FormEvent) => {
@@ -303,25 +344,43 @@ export default function ProfilePage() {
   };
 
   // Address Manager functions
-  const handleAddAddress = (e: React.FormEvent) => {
+  const handleAddAddress = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!newAddress.fullName || !newAddress.flat || !newAddress.phone) return;
-    
-    const id = `addr-${Date.now()}`;
-    const added = {
-      ...newAddress,
-      id,
-      landmark: newAddress.landmark || "",
-      latitude: null,
-      longitude: null,
-      isDefault: addresses.length === 0,
-    };
-    const updated = [...addresses, added];
-    setAddresses(updated);
-    setIsAddingAddress(false);
-    
-    if (user) {
-      localStorage.setItem(`nonzo_addresses_${user.mobile}`, JSON.stringify(updated));
+
+    try {
+      const res = await fetch("/api/address", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          tag: newAddress.tag,
+          fullName: newAddress.fullName,
+          flat: newAddress.flat,
+          area: newAddress.area,
+          city: newAddress.city,
+          pincode: newAddress.pincode,
+          phone: newAddress.phone,
+          landmark: newAddress.landmark,
+          isDefault: addresses.length === 0
+        })
+      });
+
+      if (res.ok) {
+        const data = await res.json();
+        const added = data.address;
+        const updated = [...addresses, added];
+        setAddresses(updated);
+        setIsAddingAddress(false);
+
+        if (user) {
+          localStorage.setItem(`nonzo_addresses_${user.mobile}`, JSON.stringify(updated));
+        }
+      } else {
+        const errData = await res.json();
+        alert(errData.error || "Failed to add address");
+      }
+    } catch (err) {
+      console.error("Failed to add address:", err);
     }
 
     setNewAddress({
@@ -342,41 +401,88 @@ export default function ProfilePage() {
     setEditAddressData({ ...addr });
   };
 
-  const handleSaveEditAddress = (e: React.FormEvent) => {
+  const handleSaveEditAddress = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!editAddressData.fullName || !editAddressData.flat || !editAddressData.phone) return;
 
-    const updated = addresses.map((a) =>
-      a.id === editAddressData.id ? { ...editAddressData } : a
-    );
-    setAddresses(updated);
-    setEditingAddressId(null);
-    setEditAddressData(null);
+    try {
+      const res = await fetch("/api/address", {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(editAddressData)
+      });
 
-    if (user) {
-      localStorage.setItem(`nonzo_addresses_${user.mobile}`, JSON.stringify(updated));
+      if (res.ok) {
+        const data = await res.json();
+        const updated = addresses.map((a) =>
+          a.id === editAddressData.id ? data.address : a
+        );
+        setAddresses(updated);
+        setEditingAddressId(null);
+        setEditAddressData(null);
+
+        if (user) {
+          localStorage.setItem(`nonzo_addresses_${user.mobile}`, JSON.stringify(updated));
+        }
+      } else {
+        const errData = await res.json();
+        alert(errData.error || "Failed to update address");
+      }
+    } catch (err) {
+      console.error("Failed to update address:", err);
     }
   };
 
-  const handleDeleteAddress = (id: string, e: React.MouseEvent) => {
+  const handleDeleteAddress = async (id: string, e: React.MouseEvent) => {
     e.stopPropagation();
-    const updated = addresses.filter((a) => a.id !== id);
-    setAddresses(updated);
+    try {
+      const res = await fetch(`/api/address?id=${id}`, {
+        method: "DELETE"
+      });
 
-    if (user) {
-      localStorage.setItem(`nonzo_addresses_${user.mobile}`, JSON.stringify(updated));
+      if (res.ok) {
+        const updated = addresses.filter((a) => a.id !== id);
+        setAddresses(updated);
+
+        if (user) {
+          localStorage.setItem(`nonzo_addresses_${user.mobile}`, JSON.stringify(updated));
+        }
+      } else {
+        const errData = await res.json();
+        alert(errData.error || "Failed to delete address");
+      }
+    } catch (err) {
+      console.error("Failed to delete address:", err);
     }
   };
 
-  const handleSetDefaultAddress = (id: string, e: React.MouseEvent) => {
+  const handleSetDefaultAddress = async (id: string, e: React.MouseEvent) => {
     e.stopPropagation();
-    const updated = addresses.map((a) => ({
-      ...a,
-      isDefault: a.id === id,
-    }));
-    setAddresses(updated);
-    if (user) {
-      localStorage.setItem(`nonzo_addresses_${user.mobile}`, JSON.stringify(updated));
+    const targetAddr = addresses.find((a) => a.id === id);
+    if (!targetAddr) return;
+
+    try {
+      const res = await fetch("/api/address", {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ ...targetAddr, isDefault: true })
+      });
+
+      if (res.ok) {
+        const updated = addresses.map((a) => ({
+          ...a,
+          isDefault: a.id === id,
+        }));
+        setAddresses(updated);
+        if (user) {
+          localStorage.setItem(`nonzo_addresses_${user.mobile}`, JSON.stringify(updated));
+        }
+      } else {
+        const errData = await res.json();
+        alert(errData.error || "Failed to set default address");
+      }
+    } catch (err) {
+      console.error("Failed to set default address:", err);
     }
   };
 
@@ -760,7 +866,8 @@ export default function ProfilePage() {
                     </div>
                   </div>
 
-                  {/* ADMIN BACKDOOR PORTAL */}
+                  {/* ADMIN BACKDOOR PORTAL - Removed from standard user profile for security. Admin panel can be accessed directly at /admin. */}
+                  {/* 
                   <Link
                     href="/admin"
                     className="flex items-center justify-between rounded-xl border border-brand-red bg-brand-red/5 hover:bg-brand-red/10 p-3.5 transition-all text-xs"
@@ -774,6 +881,7 @@ export default function ProfilePage() {
                     </div>
                     <span className="text-brand-red font-black">Open Panel &rarr;</span>
                   </Link>
+                  */}
                 </div>
               </AccordionSection>
 

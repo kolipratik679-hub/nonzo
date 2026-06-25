@@ -63,10 +63,12 @@ export async function POST(request: Request) {
 
     // Status check
     const allowedStatuses = ["CONFIRMED", "PREPARING"];
+    const packedStatuses = ["PACKED", "SHIPPED", "READY_FOR_PICKUP", "OUT_FOR_DELIVERY", "DELIVERED"];
     if (!allowedStatuses.includes(order.status)) {
-      return NextResponse.json({
-        error: `Order cannot be cancelled in status: ${order.status}`
-      }, { status: 400 });
+      const errorMessage = packedStatuses.includes(order.status)
+        ? "Your order has already been packed. It can no longer be cancelled."
+        : `Order cannot be cancelled in status: ${order.status}`;
+      return NextResponse.json({ error: errorMessage }, { status: 400 });
     }
 
     const now = getISTDate(); // standard UTC date

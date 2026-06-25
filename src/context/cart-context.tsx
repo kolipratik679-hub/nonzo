@@ -3,6 +3,7 @@ export const dynamic = "force-dynamic";
 
 import React, { createContext, useContext, useState, useEffect } from "react";
 import { Product, CutType, CUT_TYPES, PRODUCTS } from "@/lib/mock-data";
+import { useAuth } from "@/context/auth-context";
 
 // ── Weight Pricing Helpers (Dynamic Pricing) ──────────────────────
 const parseWeightToGrams = (w: string): number => {
@@ -119,6 +120,43 @@ export function CartProvider({ children }: { children: React.ReactNode }) {
   const [promoCode, setPromoCode] = useState<string | null>(null);
   const [promoError, setPromoError] = useState<string>("");
 
+  const { isLoggedIn } = useAuth();
+
+  // Load and sync cart with database on login
+  useEffect(() => {
+    if (isLoggedIn) {
+      const loadAndSyncCart = async () => {
+        try {
+          const savedLocal = localStorage.getItem("nonzo_cart");
+          const localCart = savedLocal ? JSON.parse(savedLocal) : [];
+
+          if (Array.isArray(localCart) && localCart.length > 0) {
+            const syncRes = await fetch("/api/cart", {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({ cart: localCart, action: "ADD_TO_CART" })
+            });
+            if (!syncRes.ok) {
+              console.error("Failed to sync local cart to DB");
+            }
+          }
+
+          const res = await fetch("/api/cart");
+          if (res.ok) {
+            const data = await res.json();
+            if (data.cart) {
+              setCart(data.cart);
+              localStorage.setItem("nonzo_cart", JSON.stringify(data.cart));
+            }
+          }
+        } catch (e) {
+          console.error("Failed to load and sync cart:", e);
+        }
+      };
+      loadAndSyncCart();
+    }
+  }, [isLoggedIn]);
+
   const [deliverySettings, setDeliverySettings] = useState({
     sameDayDelivery: false,
     slots: [
@@ -217,9 +255,21 @@ export function CartProvider({ children }: { children: React.ReactNode }) {
   };
 
   // Persist cart whenever it changes
-  const saveCart = (newCart: CartItem[]) => {
+  const saveCart = async (newCart: CartItem[], action?: string, productId?: string) => {
     setCart(newCart);
     localStorage.setItem("nonzo_cart", JSON.stringify(newCart));
+
+    if (isLoggedIn) {
+      try {
+        await fetch("/api/cart", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ cart: newCart, action, productId })
+        });
+      } catch (e) {
+        console.error("Failed to sync cart to DB:", e);
+      }
+    }
   };
 
   const updateProducts = (newProducts: Product[]) => {
@@ -265,11 +315,13 @@ export function CartProvider({ children }: { children: React.ReactNode }) {
         _cutType: cutType,
       });
     }
-    saveCart(newCart);
+    saveCart(newCart, "ADD_TO_CART", product.id);
   };
 
   const removeFromCart = (cartItemId: string) => {
-    saveCart(cart.filter((item) => item.id !== cartItemId));
+    const item = cart.find((i) => i.id === cartItemId);
+    const productId = item?._product.id;
+    saveCart(cart.filter((item) => item.id !== cartItemId), "REMOVE_FROM_CART", productId);
   };
 
   const updateQuantity = (cartItemId: string, quantity: number) => {
@@ -277,10 +329,16 @@ export function CartProvider({ children }: { children: React.ReactNode }) {
       removeFromCart(cartItemId);
       return;
     }
+    const item = cart.find((i) => i.id === cartItemId);
+    const productId = item?._product.id;
+    const oldQty = item?.quantity || 0;
+    const act = quantity > oldQty ? "ADD_TO_CART" : "REMOVE_FROM_CART";
     saveCart(
       cart.map((item) =>
         item.id === cartItemId ? { ...item, quantity } : item
-      )
+      ),
+      act,
+      productId
     );
   };
 
@@ -375,7 +433,7 @@ export function CartProvider({ children }: { children: React.ReactNode }) {
   };
 
   const clearCart = () => {
-    saveCart([]);
+    saveCart([], "REMOVE_FROM_CART");
     setPromoCode(null);
     setPromoError("");
   };

@@ -74,33 +74,64 @@ export default function CheckoutPage() {
 
   const [editAddressData, setEditAddressData] = useState<any>(null);
 
-  // Synchronize user and addresses
+  // Synchronize user and addresses — DB is the authoritative source
   useEffect(() => {
-    if (typeof window !== "undefined") {
-      if (user) {
+    if (user) {
+      const fetchAddresses = async () => {
+        try {
+          const res = await fetch("/api/address");
+          if (res.ok) {
+            const data = await res.json();
+            const addresses = data.addresses || [];
+            setLocalAddresses(addresses);
+            if (addresses.length > 0) {
+              const defaultAddr = addresses.find((a: any) => a.isDefault) || addresses[0];
+              setSelectedAddressId(defaultAddr.id);
+            } else {
+              setSelectedAddressId("");
+            }
+            // Cache in localStorage for offline resilience only
+            localStorage.setItem(`nonzo_addresses_${user.mobile}`, JSON.stringify(addresses));
+            return;
+          }
+        } catch (e) {
+          console.error("Failed to fetch addresses from DB:", e);
+        }
+
+        // Network error only fallback — DB fetch failed entirely
         const addressKey = `nonzo_addresses_${user.mobile}`;
         const saved = localStorage.getItem(addressKey);
         if (saved) {
           try {
             const parsed = JSON.parse(saved);
-            if (parsed && parsed.length > 0) {
-              setLocalAddresses(parsed);
+            setLocalAddresses(parsed);
+            if (parsed.length > 0) {
               const defaultAddr = parsed.find((a: any) => a.isDefault) || parsed[0];
               setSelectedAddressId(defaultAddr.id);
-              return;
+            } else {
+              setSelectedAddressId("");
             }
           } catch (e) {
-            console.error("Failed to parse saved addresses", e);
+            setLocalAddresses([]);
+            setSelectedAddressId("");
           }
+        } else {
+          setLocalAddresses([]);
+          setSelectedAddressId("");
         }
-        setLocalAddresses([]);
-        setSelectedAddressId("");
-      } else {
-        setLocalAddresses([]);
-        setSelectedAddressId("");
-      }
+      };
+      fetchAddresses();
+    } else {
+      setLocalAddresses([]);
+      setSelectedAddressId("");
     }
   }, [user]);
+
+  useEffect(() => {
+    if (user && localAddresses.length === 0) {
+      setIsAddingAddress(true);
+    }
+  }, [localAddresses, user]);
 
   const today = new Date();
   const tomorrow = new Date();
@@ -188,64 +219,106 @@ export default function CheckoutPage() {
     }
   };
 
-  const handleProfileSubmit = (e: React.FormEvent) => {
+  const handleProfileSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!authName.trim()) {
       setAuthError("Please enter your full name");
       return;
     }
     setAuthError(null);
-    setAuthStep("address");
+    setIsAuthLoading(true);
+    try {
+      await login(authName, authMobile, authEmail);
+    } catch (err: any) {
+      setAuthError(err.message || "Failed to complete profile registration.");
+    } finally {
+      setIsAuthLoading(false);
+    }
   };
 
-  const handleAddressSubmit = (e: React.FormEvent) => {
+  const handleAddressSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!authFlat.trim() || !authPincode.trim()) {
       setAuthError("Please fill out flat details and pincode");
       return;
     }
     setAuthError(null);
+    setIsAuthLoading(true);
 
-    login(authName, authMobile, authEmail);
+    try {
+      await login(authName, authMobile, authEmail);
 
-    const savedAddressObj = {
-      id: `addr-${Date.now()}`,
-      tag: "Home",
-      fullName: authName,
-      flat: authFlat,
-      area: authArea,
-      city: "Navi Mumbai",
-      pincode: authPincode,
-      phone: authMobile,
-      landmark: authLandmark || "",
-      latitude: null,
-      longitude: null,
-      isDefault: true
-    };
+      const res = await fetch("/api/address", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          tag: "Home",
+          fullName: authName,
+          flat: authFlat,
+          area: authArea,
+          city: "Navi Mumbai",
+          pincode: authPincode,
+          phone: authMobile,
+          landmark: authLandmark || "",
+          isDefault: true
+        })
+      });
 
-    localStorage.setItem(`nonzo_addresses_${authMobile}`, JSON.stringify([savedAddressObj]));
+      if (res.ok) {
+        const data = await res.json();
+        const savedAddressObj = data.address;
+        setLocalAddresses([savedAddressObj]);
+        setSelectedAddressId(savedAddressObj.id);
+        localStorage.setItem(`nonzo_addresses_${authMobile}`, JSON.stringify([savedAddressObj]));
+      } else {
+        const errData = await res.json();
+        setAuthError(errData.error || "Failed to save address to DB");
+      }
+    } catch (err: any) {
+      setAuthError(err.message || "Failed to complete address submission");
+    } finally {
+      setIsAuthLoading(false);
+    }
   };
 
-  const handleAddAddress = (e: React.FormEvent) => {
+  const handleAddAddress = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!newAddress.fullName || !newAddress.flat || !newAddress.phone) return;
 
-    const id = `addr-${Date.now()}`;
-    const added = {
-      ...newAddress,
-      id,
-      landmark: newAddress.landmark || "",
-      latitude: null,
-      longitude: null,
-      isDefault: localAddresses.length === 0,
-    };
-    const updatedList = [...localAddresses, added];
-    setLocalAddresses(updatedList);
-    setSelectedAddressId(id);
-    setIsAddingAddress(false);
+    try {
+      const res = await fetch("/api/address", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          tag: newAddress.tag,
+          fullName: newAddress.fullName,
+          flat: newAddress.flat,
+          area: newAddress.area,
+          city: newAddress.city,
+          pincode: newAddress.pincode,
+          phone: newAddress.phone,
+          landmark: newAddress.landmark,
+          isDefault: localAddresses.length === 0
+        })
+      });
 
-    if (user) {
-      localStorage.setItem(`nonzo_addresses_${user.mobile}`, JSON.stringify(updatedList));
+      if (res.ok) {
+        const data = await res.json();
+        const added = data.address;
+        const updatedList = [...localAddresses, added];
+        setLocalAddresses(updatedList);
+        setSelectedAddressId(added.id);
+        setIsAddingAddress(false);
+
+        if (user) {
+          localStorage.setItem(`nonzo_addresses_${user.mobile}`, JSON.stringify(updatedList));
+        }
+      } else {
+        const errData = await res.json();
+        alert(errData.error || "Failed to add address");
+      }
+    } catch (err: any) {
+      console.error("Failed to add address:", err);
     }
 
     // Reset form
@@ -267,50 +340,97 @@ export default function CheckoutPage() {
     setEditAddressData({ ...addr });
   };
 
-  const handleSaveEditAddress = (e: React.FormEvent) => {
+  const handleSaveEditAddress = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!editAddressData.fullName || !editAddressData.flat || !editAddressData.phone) return;
 
-    const updatedList = localAddresses.map((a) =>
-      a.id === editAddressData.id ? { ...editAddressData } : a
-    );
-    setLocalAddresses(updatedList);
-    setEditingAddressId(null);
-    setEditAddressData(null);
+    try {
+      const res = await fetch("/api/address", {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(editAddressData)
+      });
 
-    if (user) {
-      localStorage.setItem(`nonzo_addresses_${user.mobile}`, JSON.stringify(updatedList));
-    }
-  };
+      if (res.ok) {
+        const data = await res.json();
+        const updatedList = localAddresses.map((a) =>
+          a.id === editAddressData.id ? data.address : a
+        );
+        setLocalAddresses(updatedList);
+        setEditingAddressId(null);
+        setEditAddressData(null);
 
-  const handleDeleteAddress = (id: string, e: React.MouseEvent) => {
-    e.stopPropagation();
-    const updatedList = localAddresses.filter((a) => a.id !== id);
-    setLocalAddresses(updatedList);
-
-    if (selectedAddressId === id) {
-      if (updatedList.length > 0) {
-        const defaultAddr = updatedList.find((a) => a.isDefault) || updatedList[0];
-        setSelectedAddressId(defaultAddr.id);
+        if (user) {
+          localStorage.setItem(`nonzo_addresses_${user.mobile}`, JSON.stringify(updatedList));
+        }
       } else {
-        setSelectedAddressId("");
+        const errData = await res.json();
+        alert(errData.error || "Failed to update address");
       }
-    }
-
-    if (user) {
-      localStorage.setItem(`nonzo_addresses_${user.mobile}`, JSON.stringify(updatedList));
+    } catch (err: any) {
+      console.error("Failed to update address:", err);
     }
   };
 
-  const handleSetDefaultAddress = (id: string, e: React.MouseEvent) => {
+  const handleDeleteAddress = async (id: string, e: React.MouseEvent) => {
     e.stopPropagation();
-    const updatedList = localAddresses.map((a) => ({
-      ...a,
-      isDefault: a.id === id,
-    }));
-    setLocalAddresses(updatedList);
-    if (user) {
-      localStorage.setItem(`nonzo_addresses_${user.mobile}`, JSON.stringify(updatedList));
+    try {
+      const res = await fetch(`/api/address?id=${id}`, {
+        method: "DELETE"
+      });
+
+      if (res.ok) {
+        const updatedList = localAddresses.filter((a) => a.id !== id);
+        setLocalAddresses(updatedList);
+
+        if (selectedAddressId === id) {
+          if (updatedList.length > 0) {
+            const defaultAddr = updatedList.find((a) => a.isDefault) || updatedList[0];
+            setSelectedAddressId(defaultAddr.id);
+          } else {
+            setSelectedAddressId("");
+          }
+        }
+
+        if (user) {
+          localStorage.setItem(`nonzo_addresses_${user.mobile}`, JSON.stringify(updatedList));
+        }
+      } else {
+        const errData = await res.json();
+        alert(errData.error || "Failed to delete address");
+      }
+    } catch (err: any) {
+      console.error("Failed to delete address:", err);
+    }
+  };
+
+  const handleSetDefaultAddress = async (id: string, e: React.MouseEvent) => {
+    e.stopPropagation();
+    const targetAddr = localAddresses.find((a) => a.id === id);
+    if (!targetAddr) return;
+
+    try {
+      const res = await fetch("/api/address", {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ ...targetAddr, isDefault: true })
+      });
+
+      if (res.ok) {
+        const updatedList = localAddresses.map((a) => ({
+          ...a,
+          isDefault: a.id === id,
+        }));
+        setLocalAddresses(updatedList);
+        if (user) {
+          localStorage.setItem(`nonzo_addresses_${user.mobile}`, JSON.stringify(updatedList));
+        }
+      } else {
+        const errData = await res.json();
+        alert(errData.error || "Failed to set default address");
+      }
+    } catch (err: any) {
+      console.error("Failed to set default address:", err);
     }
   };
 
@@ -335,7 +455,7 @@ export default function CheckoutPage() {
   }) => {
     const selectedAddress = localAddresses.find((a) => a.id === selectedAddressId);
     if (!selectedAddress) {
-      throw new Error("Delivery address not selected.");
+      throw new Error("Please complete your delivery address before placing the order.");
     }
 
     const orderPayload = {
@@ -429,6 +549,12 @@ export default function CheckoutPage() {
 
   const handlePlaceOrder = async () => {
     setPaymentError(null);
+
+    const selectedAddress = localAddresses.find((a) => a.id === selectedAddressId);
+    if (!selectedAddress) {
+      setPaymentError("Please complete your delivery address before placing the order.");
+      return;
+    }
 
     if (paymentMethod === "cod") {
       setIsProcessingPayment(true);
@@ -1406,7 +1532,7 @@ export default function CheckoutPage() {
 
           <button
             onClick={handlePlaceOrder}
-            disabled={localAddresses.length === 0}
+            disabled={false}
             className="w-full flex items-center justify-between rounded-2xl bg-brand-red px-6 py-4 shadow-[0_4px_20px_rgba(200,16,46,0.3)] transition-all hover:bg-red-700 active-scale text-white md:w-auto md:min-w-[320px] disabled:bg-zinc-200 disabled:text-zinc-400 disabled:shadow-none disabled:cursor-not-allowed"
             style={{ height: "56px" }}
           >

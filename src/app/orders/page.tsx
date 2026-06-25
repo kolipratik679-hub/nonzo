@@ -45,11 +45,28 @@ export default function OrderHistoryPage() {
   useEffect(() => {
     document.title = "Orders | NONZO";
     
-    // Load placed orders specific to the logged-in user
-    if (user && typeof window !== "undefined") {
-      const saved = localStorage.getItem(`nonzo_orders_${user.mobile}`);
-      const localOrders = saved ? JSON.parse(saved) : [];
-      setOrders(localOrders);
+    if (user) {
+      const fetchOrders = async () => {
+        try {
+          const res = await fetch("/api/orders");
+          if (res.ok) {
+            const data = await res.json();
+            if (data.orders) {
+              setOrders(data.orders);
+              localStorage.setItem(`nonzo_orders_${user.mobile}`, JSON.stringify(data.orders));
+              return;
+            }
+          }
+        } catch (e) {
+          console.error("Failed to fetch orders from DB:", e);
+        }
+        
+        // Fallback
+        const saved = localStorage.getItem(`nonzo_orders_${user.mobile}`);
+        const localOrders = saved ? JSON.parse(saved) : [];
+        setOrders(localOrders);
+      };
+      fetchOrders();
     } else {
       setOrders([]);
     }
@@ -210,10 +227,12 @@ export default function OrderHistoryPage() {
       ) : (
         <div className="space-y-4">
           {orders.map((ord) => {
-            const isCancelled = ord.status === "Cancelled" || ord.status === "CANCELLED";
-            const isDelivered = ord.status === "Delivered";
-            const isConfirmed = ord.status === "Confirmed" || ord.status === "Confirmed & Preparing";
-            const isCancellable = isConfirmed && !isCancelled && !isDelivered;
+            const isCancelled = ord.status === "CANCELLED";
+            const isDelivered = ord.status === "DELIVERED";
+            const isPacked = ["PACKED", "SHIPPED", "READY_FOR_PICKUP", "OUT_FOR_DELIVERY"].includes(ord.status);
+            const isCancellable = (ord.status === "CONFIRMED" || ord.status === "PREPARING") && !isCancelled;
+            const showCancelDisabled = isPacked && !isCancelled;
+            const showCancelBtn = isCancellable || showCancelDisabled;
             
             return (
               <div
@@ -232,14 +251,16 @@ export default function OrderHistoryPage() {
                     </span>
                   </div>
                   
-                  {/* Status tags */}
+                  {/* Status badge */}
                   <span
                     className={`rounded-full text-[9px] font-extrabold px-3 py-1 uppercase tracking-wide border ${
                       isDelivered
                         ? "bg-emerald-50 text-emerald-800 border-emerald-100"
                         : isCancelled
                         ? "bg-red-50 text-red-800 border-red-100"
-                        : isConfirmed
+                        : isPacked
+                        ? "bg-orange-50 text-orange-800 border-orange-100"
+                        : (ord.status === "CONFIRMED" || ord.status === "PREPARING")
                         ? "bg-blue-50 text-blue-800 border-blue-100"
                         : "bg-amber-50 text-amber-800 border-amber-100"
                     }`}
@@ -330,13 +351,25 @@ export default function OrderHistoryPage() {
                     Reorder Items
                   </button>
                   
-                  {isCancellable && (
-                    <button
-                      onClick={() => handleInitiateCancel(ord.id)}
-                      className="flex-1 flex items-center justify-center gap-1.5 rounded-xl border border-red-200 bg-red-50/50 py-2 text-xs font-bold text-brand-red hover:bg-red-50 active-scale transition-colors"
-                    >
-                      Cancel Order
-                    </button>
+                  {showCancelBtn && (
+                    <div className="flex-1 flex flex-col gap-1">
+                      <button
+                        disabled={showCancelDisabled}
+                        onClick={() => isCancellable && handleInitiateCancel(ord.id)}
+                        className={`w-full flex items-center justify-center gap-1.5 rounded-xl border py-2 text-xs font-bold transition-colors ${
+                          showCancelDisabled
+                            ? "border-zinc-200 bg-zinc-100 text-zinc-400 cursor-not-allowed"
+                            : "border-red-200 bg-red-50/50 text-brand-red hover:bg-red-50 active-scale"
+                        }`}
+                      >
+                        Cancel Order
+                      </button>
+                      {showCancelDisabled && (
+                        <p className="text-[9px] text-zinc-400 text-center leading-tight font-medium">
+                          Your order has already been packed. It can no longer be cancelled.
+                        </p>
+                      )}
+                    </div>
                   )}
                 </div>
               </div>

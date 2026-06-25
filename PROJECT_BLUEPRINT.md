@@ -158,7 +158,7 @@ NONZO positions itself as the **premium**, **trust-first** seafood brand — not
 
 ## 10. Admin Flow
 
-Admin panel accessible from: Profile → Account & Security → System Control Panel (`/admin`)
+Admin panel accessible directly at `/admin` (System Control Panel link removed from customer profile for security)
 
 ### Admin Tabs:
 1. **Slots & Delivery** — Same-day toggle, slot timings, slot limits, free delivery threshold, delivery charge

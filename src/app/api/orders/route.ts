@@ -3,7 +3,7 @@ import { cookies } from "next/headers";
 import crypto from "crypto";
 import prisma from "@/lib/prisma";
 import { verifyToken } from "@/lib/jwt";
-import { getISTDate, getISTParts } from "@/lib/date";
+import { getISTDate, getISTParts, formatToISTDate } from "@/lib/date";
 
 // Promo codes definition
 const PROMO_CODES: Record<string, { minOrder: number; type: "flat" | "pct" | "freeship"; value: number }> = {
@@ -225,6 +225,20 @@ export async function POST(request: Request) {
         .digest("hex");
 
       if (generatedSignature !== razorpaySignature) {
+        // Log PAYMENT_FAILED
+        const ipAddress = request.headers.get("x-forwarded-for") || "127.0.0.1";
+        const userAgent = request.headers.get("user-agent") || "unknown";
+        await prisma.userActivity.create({
+          data: {
+            userId: user.id,
+            activityType: "PAYMENT_FAILED",
+            metadata: { error: "Razorpay signature verification failed", razorpayOrderId, razorpayPaymentId },
+            ipAddress,
+            userAgent,
+            createdAt: getISTDate()
+          }
+        });
+
         return NextResponse.json({ error: "Razorpay signature verification failed." }, { status: 400 });
       }
     }
@@ -333,6 +347,18 @@ export async function POST(request: Request) {
         }
       });
 
+      // Create PAYMENT_SUCCESS activity if online payment
+      if (paymentMethod === "online") {
+        await tx.userActivity.create({
+          data: {
+            userId: user.id,
+            activityType: "PAYMENT_SUCCESS",
+            referenceId: newOrder.id,
+            metadata: { total: calculatedTotal, razorpayPaymentId }
+          }
+        });
+      }
+
       return newOrder;
     });
 
@@ -341,5 +367,51 @@ export async function POST(request: Request) {
   } catch (error: any) {
     console.error("Order Creation Flow API Error:", error);
     return NextResponse.json({ error: error.message || "Failed to persist order. Transaction rolled back." }, { status: 500 });
+  }
+}
+
+export async function GET(request: Request) {
+  try {
+    const user = await getAuthenticatedUser();
+    if (!user) {
+      return NextResponse.json({ error: "Unauthenticated. Please log in." }, { status: 401 });
+    }
+
+    const orders = await prisma.order.findMany({
+      where: { userId: user.id },
+      include: {
+        items: true,
+        payments: true
+      },
+      orderBy: { createdAt: "desc" }
+    });
+
+    const formattedOrders = orders.map((ord) => ({
+      id: ord.id,
+      date: formatToISTDate(ord.createdAt),
+      status: ord.status,
+      total: ord.total,
+      deliveryAddress: ord.deliveryAddressSnapshot,
+      cancelReason: ord.cancelReason || undefined,
+      cancelledAt: ord.cancelledAt ? ord.cancelledAt.toISOString() : undefined,
+      deliveredAt: ord.deliveredAt ? ord.deliveredAt.toISOString() : undefined,
+      paymentMethod: ord.payments[0]?.method === "RAZORPAY" ? "Online Payment (Razorpay)" : "Cash On Delivery",
+      paymentStatus: ord.payments[0]?.status || "PENDING",
+      items: ord.items.map((item) => ({
+        productId: item.productId,
+        cutTypeId: item.cutTypeId || undefined,
+        name: item.productName,
+        weight: item.weight,
+        cut: item.cutName,
+        quantity: item.quantity,
+        price: item.unitPrice,
+        specialInstructions: item.specialInstructions || undefined
+      }))
+    }));
+
+    return NextResponse.json({ success: true, orders: formattedOrders });
+  } catch (error: any) {
+    console.error("GET /api/orders Error:", error);
+    return NextResponse.json({ error: "Failed to fetch orders." }, { status: 500 });
   }
 }

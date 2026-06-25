@@ -26,6 +26,7 @@ import {
 } from "lucide-react";
 import { CATEGORIES } from "@/lib/mock-data";
 import { useCart } from "@/context/cart-context";
+import { formatToIST } from "@/lib/date";
 
 interface SlotSetting {
   id: string;
@@ -1558,16 +1559,7 @@ export default function AdminDashboard() {
                           <div>
                             <span className="text-[10px] text-red-400 font-extrabold uppercase tracking-wide block">Cancellation Time</span>
                             <span className="font-bold text-red-800">
-                              {ord.cancelledAt
-                                ? new Date(ord.cancelledAt).toLocaleString("en-IN", {
-                                    day: "2-digit",
-                                    month: "short",
-                                    year: "numeric",
-                                    hour: "2-digit",
-                                    minute: "2-digit",
-                                    timeZone: "Asia/Kolkata"
-                                  })
-                                : "N/A"}
+                              {ord.cancelledAt ? formatToIST(ord.cancelledAt) : "N/A"}
                             </span>
                           </div>
                           {ord.cancelReason && (
