@@ -2,6 +2,8 @@ import { NextResponse } from "next/server";
 import crypto from "crypto";
 
 export async function POST(request: Request) {
+  // NOTE: This endpoint is deprecated for the main checkout order creation flow.
+  // Order verification and DB persistence are now transactionally unified inside POST /api/orders.
   try {
     const { razorpay_order_id, razorpay_payment_id, razorpay_signature } = await request.json();
 

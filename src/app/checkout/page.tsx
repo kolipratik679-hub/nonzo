@@ -27,7 +27,7 @@ import { useAuth } from "@/context/auth-context";
 
 export default function CheckoutPage() {
   const router = useRouter();
-  const { cart, subtotal, deliveryFee, promoDiscount, finalTotal, clearCart, deliverySettings } = useCart();
+  const { cart, subtotal, deliveryFee, promoDiscount, finalTotal, clearCart, deliverySettings, promoCode } = useCart();
 
   useEffect(() => {
     document.title = "Checkout | NONZO";
@@ -328,59 +328,101 @@ export default function CheckoutPage() {
     });
   };
 
-  const createConfirmedOrder = (paymentId?: string, rzpOrderId?: string, paymentStatus?: string) => {
-    const orderId = `NZ-${Math.floor(10000 + Math.random() * 90000)}-${new Date()
-      .getFullYear()
-      .toString()
-      .slice(-2)}`;
-    
+  const submitOrder = async (razorpayDetails?: {
+    razorpayOrderId: string;
+    razorpayPaymentId: string;
+    razorpaySignature: string;
+  }) => {
     const selectedAddress = localAddresses.find((a) => a.id === selectedAddressId);
-    const newOrder = {
-      id: orderId,
-      date: new Date().toLocaleDateString("en-IN", {
-        day: "2-digit",
-        month: "short",
-        year: "numeric"
-      }),
-      status: "Confirmed & Preparing",
-      items: cart.map((item) => ({
-        name: item.name,
+    if (!selectedAddress) {
+      throw new Error("Delivery address not selected.");
+    }
+
+    const orderPayload = {
+      cart: cart.map((item) => ({
+        productId: item._product.id,
         weight: item.weight,
-        cut: item.cutName,
+        cutTypeId: item._cutType.id,
         quantity: item.quantity,
-        price: item.price,
         specialInstructions: item.specialInstructions || ""
       })),
-      total: finalTotal,
-      paymentMethod: paymentMethod === "online" ? "Online Payment (Razorpay)" : "Cash On Delivery",
-      paymentStatus: paymentStatus || (paymentMethod === "online" ? "Paid" : "Pending"),
-      paymentId: paymentId || null,
-      razorpayOrderId: rzpOrderId || null,
-      deliveryAddress: selectedAddress
-        ? `${selectedAddress.flat}, ${selectedAddress.area}, ${selectedAddress.city} - ${selectedAddress.pincode}`
-        : selectedLocation || "Ulwe, Navi Mumbai"
+      address: {
+        tag: selectedAddress.tag,
+        fullName: selectedAddress.fullName,
+        flat: selectedAddress.flat,
+        area: selectedAddress.area,
+        city: selectedAddress.city,
+        pincode: selectedAddress.pincode,
+        phone: selectedAddress.phone,
+        landmark: selectedAddress.landmark
+      },
+      deliveryDate,
+      deliverySlot,
+      paymentMethod: paymentMethod === "online" ? "online" : "cod",
+      promoCode,
+      ...(razorpayDetails || {})
     };
 
-    // Save to user specific order history
+    const res = await fetch("/api/orders", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(orderPayload)
+    });
+
+    if (!res.ok) {
+      const errData = await res.json();
+      throw new Error(errData.error || "Failed to create order on server.");
+    }
+
+    const data = await res.json();
+
+    // Save to user specific order history in localStorage for backwards compatibility with UI pages
     if (user && typeof window !== "undefined") {
       try {
+        const newOrderLocal = {
+          id: data.orderId,
+          date: new Date().toLocaleDateString("en-IN", {
+            day: "2-digit",
+            month: "short",
+            year: "numeric",
+            timeZone: "Asia/Kolkata"
+          }),
+          status: "Confirmed & Preparing",
+          items: cart.map((item) => ({
+            productId: item._product.id,
+            cutTypeId: item._cutType.id,
+            name: item.name,
+            weight: item.weight,
+            cut: item.cutName,
+            quantity: item.quantity,
+            price: item.price,
+            specialInstructions: item.specialInstructions || ""
+          })),
+          total: finalTotal,
+          paymentMethod: paymentMethod === "online" ? "Online Payment (Razorpay)" : "Cash On Delivery",
+          paymentStatus: paymentMethod === "online" ? "Paid" : "Pending",
+          paymentId: razorpayDetails?.razorpayPaymentId || null,
+          razorpayOrderId: razorpayDetails?.razorpayOrderId || null,
+          deliveryAddress: `${selectedAddress.flat}, ${selectedAddress.area}, ${selectedAddress.city} - ${selectedAddress.pincode}`
+        };
+
         const orderKey = `nonzo_orders_${user.mobile}`;
         const existing = localStorage.getItem(orderKey);
         const orderList = existing ? JSON.parse(existing) : [];
-        orderList.unshift(newOrder);
+        orderList.unshift(newOrderLocal);
         localStorage.setItem(orderKey, JSON.stringify(orderList));
 
         // Save globally for Admin View
         const globalExisting = localStorage.getItem("nonzo_placed_orders");
         const globalOrderList = globalExisting ? JSON.parse(globalExisting) : [];
-        globalOrderList.unshift({ ...newOrder, userMobile: user.mobile, userName: user.name });
+        globalOrderList.unshift({ ...newOrderLocal, userMobile: user.mobile, userName: user.name });
         localStorage.setItem("nonzo_placed_orders", JSON.stringify(globalOrderList));
       } catch (e) {
-        console.error("Failed to save order to localStorage", e);
+        console.error("Failed to save local compatibility order copy", e);
       }
     }
 
-    setPlacedOrderId(orderId);
+    setPlacedOrderId(data.orderId);
     setIsOrderPlaced(true);
     clearCart();
   };
@@ -389,7 +431,15 @@ export default function CheckoutPage() {
     setPaymentError(null);
 
     if (paymentMethod === "cod") {
-      createConfirmedOrder();
+      setIsProcessingPayment(true);
+      setPaymentStatusText("Processing Cash on Delivery order...");
+      try {
+        await submitOrder();
+      } catch (err: any) {
+        setPaymentError(err.message || "Failed to place COD order. Please try again.");
+      } finally {
+        setIsProcessingPayment(false);
+      }
       return;
     }
 
@@ -423,37 +473,28 @@ export default function CheckoutPage() {
         ? `${selectedAddress.flat}, ${selectedAddress.area}, ${selectedAddress.city} - ${selectedAddress.pincode}`
         : selectedLocation || "Ulwe, Navi Mumbai";
 
+      const logoUrl = typeof window !== "undefined" ? window.location.origin + "/NONZO-LOGO.png" : "https://nonzo.vercel.app/NONZO-LOGO.png";
+
       const options = {
         key: process.env.NEXT_PUBLIC_RAZORPAY_KEY_ID || "rzp_test_SwESWXTwV4F46I",
         amount: rzpOrder.amount,
         currency: rzpOrder.currency,
         name: "NONZO Seafoods",
         description: "Secure Order Payment",
-        image: "https://nonzo.vercel.app/NONZO-LOGO.png",
+        image: logoUrl,
         order_id: rzpOrder.id,
         handler: async function (response: any) {
-          setPaymentStatusText("Verifying payment transaction signature...");
+          setPaymentStatusText("Verifying payment transaction signature and persisting order...");
           try {
-            const verifyRes = await fetch("/api/razorpay/verify", {
-              method: "POST",
-              headers: { "Content-Type": "application/json" },
-              body: JSON.stringify({
-                razorpay_order_id: response.razorpay_order_id,
-                razorpay_payment_id: response.razorpay_payment_id,
-                razorpay_signature: response.razorpay_signature,
-              }),
+            await submitOrder({
+              razorpayOrderId: response.razorpay_order_id,
+              razorpayPaymentId: response.razorpay_payment_id,
+              razorpaySignature: response.razorpay_signature
             });
-
-            if (!verifyRes.ok) {
-              const verifyData = await verifyRes.json();
-              throw new Error(verifyData.error || "Payment signature verification failed");
-            }
-
-            setIsProcessingPayment(false);
-            createConfirmedOrder(response.razorpay_payment_id, response.razorpay_order_id, "Paid");
           } catch (verifyError: any) {
-            setIsProcessingPayment(false);
             setPaymentError(verifyError.message || "Payment verification failed. Please try again.");
+          } finally {
+            setIsProcessingPayment(false);
           }
         },
         prefill: {

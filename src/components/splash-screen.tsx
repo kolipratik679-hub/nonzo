@@ -8,31 +8,32 @@ export function SplashScreen() {
   const [shouldRender, setShouldRender] = useState(false);
 
   useEffect(() => {
-    // Check if splash was already shown in the current session
     const hasSeenSplash = sessionStorage.getItem("nonzo_splash_seen");
-    if (!hasSeenSplash) {
-      sessionStorage.setItem("nonzo_splash_seen", "true");
+    if (hasSeenSplash === "true") return;
 
-      let removeTimer: ReturnType<typeof setTimeout> | undefined;
-      const showTimer = setTimeout(() => {
-        setShouldRender(true);
-        setIsVisible(true);
-      }, 0);
+    setShouldRender(true);
+    setIsVisible(true);
 
-      // Total splash duration: 2.5s animation + 0.3s DOM removal buffer
-      const timer = setTimeout(() => {
-        setIsVisible(false);
-        removeTimer = setTimeout(() => {
-          setShouldRender(false);
-        }, 400);
-      }, 2500);
+    let removeTimer: ReturnType<typeof setTimeout>;
 
-      return () => {
-        clearTimeout(showTimer);
-        clearTimeout(timer);
-        if (removeTimer) clearTimeout(removeTimer);
-      };
-    }
+    const timer = setTimeout(() => {
+      setIsVisible(false);
+      removeTimer = setTimeout(() => {
+        setShouldRender(false);
+        try {
+          sessionStorage.setItem("nonzo_splash_seen", "true");
+          // Dispatch a custom event to notify location-context
+          window.dispatchEvent(new Event("nonzoSplashFinished"));
+        } catch (e) {
+          console.error("sessionStorage write failed", e);
+        }
+      }, 400);
+    }, 2500);
+
+    return () => {
+      clearTimeout(timer);
+      if (removeTimer) clearTimeout(removeTimer);
+    };
   }, []);
 
   if (!shouldRender) return null;

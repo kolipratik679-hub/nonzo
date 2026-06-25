@@ -85,7 +85,7 @@ async function main() {
         youtubeUrl: 'https://youtube.com/nonzo',
         whatsappLink: 'https://wa.me/917788996549',
         googleMapsLink: 'https://maps.google.com/?q=Sai+Sagar+Apartment+Sector+24+Ulwe',
-        logoUrl: '/images/NONZO-LOGO.png',
+        logoUrl: '/NONZO-LOGO.png',
         faviconUrl: '/favicon.ico',
         currency: 'INR',
         currencySymbol: '₹',

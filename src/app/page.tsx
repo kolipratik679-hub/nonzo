@@ -149,10 +149,12 @@ export default function HomePage() {
     : products;
 
   // Filter sections
-  const freshProducts = products.filter((p) => p.stockStatus !== "Out Of Stock").slice(0, 4);
   const bestSellers = products.filter((p) =>
     ["tiger-prawns", "silver-pomfret", "rawas", "black-pomfret"].includes(p.id)
   );
+  const freshProducts = products
+    .filter((p) => p.stockStatus !== "Out Of Stock" && !bestSellers.some((b) => b.id === p.id))
+    .slice(0, 4);
   const buyAgainProducts = products.filter((p) =>
     ["bombil", "black-pomfret"].includes(p.id)
   );

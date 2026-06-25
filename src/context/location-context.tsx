@@ -45,11 +45,28 @@ export function LocationProvider({ children }: { children: React.ReactNode }) {
         setIsLocationModalOpen(false);
       }, 0);
     } else {
-      // Open modal after splash screen completes (which is 2.5s)
-      const timer = setTimeout(() => {
-        setIsLocationModalOpen(true);
-      }, 2700);
-      return () => clearTimeout(timer);
+      const hasSeenSplash = sessionStorage.getItem("nonzo_splash_seen");
+      if (hasSeenSplash === "true") {
+        const timer = setTimeout(() => {
+          setIsLocationModalOpen(true);
+        }, 200);
+        return () => clearTimeout(timer);
+      } else {
+        const handleSplashFinished = () => {
+          setIsLocationModalOpen(true);
+        };
+        window.addEventListener("nonzoSplashFinished", handleSplashFinished);
+        
+        // Fallback timer in case event is missed or skipped
+        const timer = setTimeout(() => {
+          setIsLocationModalOpen(true);
+        }, 3200);
+        
+        return () => {
+          window.removeEventListener("nonzoSplashFinished", handleSplashFinished);
+          clearTimeout(timer);
+        };
+      }
     }
   }, []);
 

@@ -1,11 +1,58 @@
 /**
- * Utility to get the current time adjusted to Asia/Kolkata (IST, UTC+5:30).
- * Since Prisma/MySQL store and read Date objects in UTC, we adjust the time
- * offset so that the stored values reflect IST time directly.
+ * Standardized timezone utilities for NONZO.
+ * Stores UTC internally, and converts to Asia/Kolkata for display/relativity.
  */
+
+// Return standard UTC date internally for database operations.
 export function getISTDate(): Date {
-  const utcDate = new Date();
-  // IST is UTC + 5.5 hours (5.5 * 60 * 60 * 1000 ms)
-  const istOffset = 5.5 * 60 * 60 * 1000;
-  return new Date(utcDate.getTime() + istOffset);
+  return new Date();
 }
+
+export interface ISTParts {
+  year: number;
+  month: number;
+  day: number;
+  hour: number;
+  minute: number;
+  second: number;
+}
+
+/**
+ * Gets date parts formatted to Asia/Kolkata (IST) timezone.
+ */
+export function getISTParts(date: Date = new Date()): ISTParts {
+  const formatter = new Intl.DateTimeFormat("en-US", {
+    timeZone: "Asia/Kolkata",
+    year: "numeric",
+    month: "numeric",
+    day: "numeric",
+    hour: "numeric",
+    minute: "numeric",
+    second: "numeric",
+    hour12: false,
+  });
+  const parts = formatter.formatToParts(date);
+  const partValues: Record<string, string> = {};
+  parts.forEach((p) => {
+    partValues[p.type] = p.value;
+  });
+  return {
+    year: parseInt(partValues.year),
+    month: parseInt(partValues.month),
+    day: parseInt(partValues.day),
+    hour: parseInt(partValues.hour),
+    minute: parseInt(partValues.minute),
+    second: parseInt(partValues.second),
+  };
+}
+
+/**
+ * Formats standard UTC date to Asia/Kolkata (IST) string.
+ */
+export function formatToIST(date: Date | string | number): string {
+  const d = typeof date === "string" || typeof date === "number" ? new Date(date) : date;
+  return d.toLocaleString("en-IN", {
+    timeZone: "Asia/Kolkata",
+  });
+}
+

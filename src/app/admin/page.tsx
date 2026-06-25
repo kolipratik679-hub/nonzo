@@ -1503,61 +1503,95 @@ export default function AdminDashboard() {
               </p>
             ) : (
               <div className="space-y-4">
-                {placedOrders.map((ord: any) => (
-                  <div
-                    key={ord.id}
-                    className="border border-border-gray rounded-2xl p-4 space-y-3 bg-zinc-50/20"
-                  >
-                    <div className="flex flex-wrap justify-between items-start border-b border-border-gray pb-2 gap-2 text-xs">
-                      <div>
-                        <span className="font-extrabold text-foreground block">Order ID: {ord.id}</span>
-                        <span className="text-[10px] text-zinc-400 block mt-0.5 font-medium">{ord.date}</span>
-                      </div>
-                      <div className="text-right">
-                        <span className="rounded-full bg-blue-50 border border-blue-100 text-blue-800 text-[9px] font-black px-2.5 py-0.5 uppercase block w-fit ml-auto">
-                          {ord.status}
-                        </span>
-                        {ord.userName && (
-                          <span className="text-[10px] text-zinc-500 font-bold block mt-1">
-                            Customer: {ord.userName} ({ord.userMobile})
+                {placedOrders.map((ord: any) => {
+                  const isCancelled = ord.status === "Cancelled" || ord.status === "CANCELLED";
+                  return (
+                    <div
+                      key={ord.id}
+                      className="border border-border-gray rounded-2xl p-4 space-y-3 bg-zinc-50/20"
+                    >
+                      <div className="flex flex-wrap justify-between items-start border-b border-border-gray pb-2 gap-2 text-xs">
+                        <div>
+                          <span className="font-extrabold text-foreground block">Order ID: {ord.id}</span>
+                          <span className="text-[10px] text-zinc-400 block mt-0.5 font-medium">{ord.date}</span>
+                        </div>
+                        <div className="text-right">
+                          <span className={`rounded-full text-[9px] font-black px-2.5 py-0.5 uppercase block w-fit ml-auto border ${
+                            isCancelled
+                              ? "bg-red-50 border-red-100 text-brand-red font-bold"
+                              : "bg-blue-50 border-blue-100 text-blue-800"
+                          }`}>
+                            {ord.status}
                           </span>
-                        )}
+                          {ord.userName && (
+                            <span className="text-[10px] text-zinc-500 font-bold block mt-1">
+                              Customer: {ord.userName} ({ord.userMobile})
+                            </span>
+                          )}
+                        </div>
                       </div>
-                    </div>
 
-                    {/* Items */}
-                    <div className="space-y-2">
-                      {ord.items.map((item: any, idx: number) => (
-                        <div key={idx} className="flex flex-col text-xs bg-white border border-border-gray/40 rounded-xl p-2.5">
-                          <div className="flex justify-between font-bold">
-                            <span className="text-foreground">{item.name}</span>
-                            <span className="text-foreground">₹{item.price * item.quantity}</span>
+                      {/* Items */}
+                      <div className="space-y-2">
+                        {ord.items.map((item: any, idx: number) => (
+                          <div key={idx} className="flex flex-col text-xs bg-white border border-border-gray/40 rounded-xl p-2.5">
+                            <div className="flex justify-between font-bold">
+                              <span className="text-foreground">{item.name}</span>
+                              <span className="text-foreground">₹{item.price * item.quantity}</span>
+                            </div>
+                            <div className="text-[10px] text-zinc-400 font-semibold mt-0.5">
+                              Portion: {item.weight} &bull; Cut: {item.cut} x {item.quantity}
+                            </div>
+                            {item.specialInstructions && item.cut === "Special Cut" && (
+                              <div className="mt-1.5 text-[10px] text-zinc-600 bg-red-50/40 border border-red-100/50 rounded-lg p-2 font-medium italic">
+                                <strong className="text-[8px] uppercase font-extrabold text-brand-red block tracking-wider not-italic mb-0.5">Cut Request Notes:</strong>
+                                &quot;{item.specialInstructions}&quot;
+                              </div>
+                            )}
                           </div>
-                          <div className="text-[10px] text-zinc-400 font-semibold mt-0.5">
-                            Portion: {item.weight} &bull; Cut: {item.cut} x {item.quantity}
+                        ))}
+                      </div>
+
+                      {/* Cancellation Details */}
+                      {isCancelled && (
+                        <div className="bg-red-50/55 border border-red-100 rounded-xl p-3 text-xs space-y-1.5 animate-fade-in">
+                          <div>
+                            <span className="text-[10px] text-red-400 font-extrabold uppercase tracking-wide block">Cancellation Time</span>
+                            <span className="font-bold text-red-800">
+                              {ord.cancelledAt
+                                ? new Date(ord.cancelledAt).toLocaleString("en-IN", {
+                                    day: "2-digit",
+                                    month: "short",
+                                    year: "numeric",
+                                    hour: "2-digit",
+                                    minute: "2-digit",
+                                    timeZone: "Asia/Kolkata"
+                                  })
+                                : "N/A"}
+                            </span>
                           </div>
-                          {item.specialInstructions && item.cut === "Special Cut" && (
-                            <div className="mt-1.5 text-[10px] text-zinc-600 bg-red-50/40 border border-red-100/50 rounded-lg p-2 font-medium italic">
-                              <strong className="text-[8px] uppercase font-extrabold text-brand-red block tracking-wider not-italic mb-0.5">Cut Request Notes:</strong>
-                              &quot;{item.specialInstructions}&quot;
+                          {ord.cancelReason && (
+                            <div className="pt-1.5 border-t border-red-100/50">
+                              <span className="text-[10px] text-red-400 font-extrabold uppercase tracking-wide block">Reason Given</span>
+                              <p className="font-medium italic text-brand-red">&quot;{ord.cancelReason}&quot;</p>
                             </div>
                           )}
                         </div>
-                      ))}
-                    </div>
+                      )}
 
-                    <div className="flex flex-wrap justify-between items-center text-xs pt-2 border-t border-border-gray/30 gap-2">
-                      <div>
-                        <span className="text-zinc-400 font-semibold block text-[9px] uppercase">Destination</span>
-                        <span className="font-bold text-zinc-600">{ord.deliveryAddress}</span>
-                      </div>
-                      <div className="text-right">
-                        <span className="text-zinc-400 font-semibold block text-[9px] uppercase">Charged Total</span>
-                        <span className="font-black text-foreground">₹{ord.total}</span>
+                      <div className="flex flex-wrap justify-between items-center text-xs pt-2 border-t border-border-gray/30 gap-2">
+                        <div>
+                          <span className="text-zinc-400 font-semibold block text-[9px] uppercase">Destination</span>
+                          <span className="font-bold text-zinc-600">{ord.deliveryAddress}</span>
+                        </div>
+                        <div className="text-right">
+                          <span className="text-zinc-400 font-semibold block text-[9px] uppercase">Charged Total</span>
+                          <span className="font-black text-foreground">₹{ord.total}</span>
+                        </div>
                       </div>
                     </div>
-                  </div>
-                ))}
+                  );
+                })}
               </div>
             )}
           </div>

@@ -50,6 +50,8 @@ export function BottomNav() {
           const Icon = tab.icon;
           const isActive = tab.href === "/" 
             ? pathname === "/" 
+            : tab.href === "/profile"
+            ? pathname.startsWith("/profile") || pathname.startsWith("/orders")
             : pathname.startsWith(tab.href);
 
           return (
