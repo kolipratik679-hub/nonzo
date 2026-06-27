@@ -15,7 +15,9 @@ import {
   Truck,
   BarChart3,
   Settings,
+  LogOut,
 } from "lucide-react";
+import { useAdminAuth } from "@/context/admin-auth-context";
 
 // ─── Menu Configuration ──────────────────────────────────
 interface NavItem {
@@ -46,6 +48,7 @@ interface AdminSidebarProps {
 
 export function AdminSidebar({ collapsed, mobileOpen, onCloseMobile }: AdminSidebarProps) {
   const pathname = usePathname();
+  const { adminUser, adminLogout } = useAdminAuth();
 
   const isActive = (href: string) => {
     if (href === "/admin") return pathname === "/admin";
@@ -59,6 +62,22 @@ export function AdminSidebar({ collapsed, mobileOpen, onCloseMobile }: AdminSide
   ]
     .filter(Boolean)
     .join(" ");
+
+  const initials = adminUser?.name
+    ? adminUser.name
+        .split(" ")
+        .map((w) => w[0])
+        .join("")
+        .toUpperCase()
+        .slice(0, 2)
+    : "AD";
+
+  const roleLabel =
+    adminUser?.role === "SUPER_ADMIN"
+      ? "Super Admin"
+      : adminUser?.role === "MANAGER"
+        ? "Manager"
+        : "Viewer";
 
   return (
     <>
@@ -102,6 +121,29 @@ export function AdminSidebar({ collapsed, mobileOpen, onCloseMobile }: AdminSide
             );
           })}
         </nav>
+
+        {/* Bottom Profile and Logout Section */}
+        <div className="admin-sidebar-footer">
+          <div className="admin-sidebar-profile-info">
+            <div className="admin-sidebar-avatar" title={`${adminUser?.name || "Admin"} (${roleLabel})`}>
+              {initials}
+            </div>
+            {!collapsed && (
+              <div className="admin-sidebar-profile-details">
+                <div className="admin-sidebar-profile-name">{adminUser?.name || "Admin"}</div>
+                <div className="admin-sidebar-profile-role">{roleLabel}</div>
+              </div>
+            )}
+          </div>
+          <button
+            onClick={adminLogout}
+            className="admin-sidebar-logout-btn"
+            title="Log Out"
+            type="button"
+          >
+            <LogOut size={18} />
+          </button>
+        </div>
       </aside>
     </>
   );
